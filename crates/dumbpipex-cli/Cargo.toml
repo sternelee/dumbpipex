@@ -1,0 +1,18 @@
+[package]
+name = "dumbpipex-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+dumbpipex-core = { path = "../dumbpipex-core" }
+iroh.workspace = true
+libc = "0.2"
+portable-pty.workspace = true
+rand.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+whoami.workspace = true
