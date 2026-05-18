@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="app_surface">#FF020617</color>
+    <color name="app_surface_elevated">#FF0F172A</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

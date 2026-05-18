@@ -60,6 +60,10 @@
           rows="5"
           placeholder="粘贴本地 dumbpipex-cli 输出的 ticket"
           value={ticket}
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck={false}
+          enterkeyhint="done"
           oninput={(event) => onTicketChange((event.currentTarget as HTMLTextAreaElement).value)}
           disabled={busy}
         ></textarea>
@@ -70,7 +74,12 @@
         <input
           value={shell}
           placeholder="默认使用远程 agent 配置的 shell"
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck={false}
+          enterkeyhint="done"
           oninput={(event) => onShellChange((event.currentTarget as HTMLInputElement).value)}
+          onkeydown={(event) => event.key === "Enter" && !busy && ticket.trim() && onConnect()}
           disabled={busy}
         />
       </label>
@@ -203,7 +212,8 @@
   button {
     padding: 0.9rem 1rem;
     font-weight: 600;
-    cursor: pointer;
+    min-height: 3rem;
+    touch-action: manipulation;
   }
 
   button.primary {
@@ -213,7 +223,6 @@
 
   button:disabled {
     opacity: 0.5;
-    cursor: not-allowed;
   }
 
   .meta {
@@ -226,6 +235,21 @@
     padding-left: 1.25rem;
     display: grid;
     gap: 0.6rem;
+  }
+
+  @media (max-width: 899px) {
+    .hero-card {
+      flex-direction: column;
+    }
+
+    .status-pill {
+      width: fit-content;
+    }
+
+    .connect-card,
+    .tips-card {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
   }
 
   @media (min-width: 900px) {

@@ -1,26 +1,5 @@
-<script lang="ts" module>
-  export type RemotePtyTheme = {
-    background: string;
-    foreground: string;
-    cursor: string;
-    selectionBackground?: string;
-    selectionInactiveBackground?: string;
-  };
-
-  export type RemotePtyApi = {
-    writeBase64Url: (data: string) => void;
-    writeText: (data: string) => void;
-    clear: () => void;
-    fit: () => void;
-    focus: () => void;
-    finish: () => void;
-    findNext: (query: string) => boolean;
-    findPrevious: (query: string) => boolean;
-    copySelection: () => Promise<boolean>;
-  };
-</script>
-
 <script lang="ts">
+  import type { RemotePtyApi, RemotePtyTheme } from "$lib/remote-pty-types";
   import { onDestroy, onMount } from "svelte";
   import { FitAddon } from "@xterm/addon-fit";
   import { SearchAddon } from "@xterm/addon-search";
@@ -141,6 +120,7 @@
   }
 
   function startLongPress(event: PointerEvent) {
+    focus();
     if (event.pointerType === "mouse") return;
     cancelLongPress();
     longPressTimer = window.setTimeout(() => {
@@ -226,6 +206,8 @@
 <style>
   .pane {
     height: 100%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 
   .pane.active {
@@ -234,8 +216,9 @@
 
   .terminal-host {
     height: 100%;
-    min-height: 48dvh;
+    min-height: 16rem;
     border-radius: 0.75rem;
     overflow: hidden;
+    overscroll-behavior: contain;
   }
 </style>

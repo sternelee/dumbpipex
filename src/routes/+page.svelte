@@ -4,7 +4,7 @@
   import { listen } from "@tauri-apps/api/event";
 
   import ConnectionHome from "$lib/ConnectionHome.svelte";
-  import type { RemotePtyApi } from "$lib/RemotePtyPane.svelte";
+  import type { RemotePtyApi } from "$lib/remote-pty-types";
   import SessionWorkspace from "$lib/SessionWorkspace.svelte";
   import type {
     ConnectTicketResponse,
@@ -100,11 +100,6 @@
     };
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
-  }
-
-  function clearRecoveryState() {
-    if (typeof localStorage === "undefined") return;
-    localStorage.removeItem(STORAGE_KEY);
   }
 
   function cancelReconnect() {
@@ -628,12 +623,26 @@
 </main>
 
 <style>
+  :global(html) {
+    height: 100%;
+    background: #020617;
+  }
+
   :global(body) {
+    min-height: 100%;
     margin: 0;
     background: #020617;
     color: #e2e8f0;
-    font-family:
-      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :global(button),
+  :global(input),
+  :global(textarea),
+  :global(select) {
+    font: inherit;
   }
 
   .app-shell {
@@ -641,5 +650,14 @@
     background:
       radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 30%),
       #020617;
+  }
+
+  @media (max-width: 899px) {
+    :global(input),
+    :global(textarea),
+    :global(select),
+    :global(button) {
+      font-size: 16px;
+    }
   }
 </style>
