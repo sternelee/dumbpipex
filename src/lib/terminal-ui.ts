@@ -48,6 +48,7 @@ export type PtySession = {
 export type ShortcutButton = { label: string; data: string; hint?: string };
 export type MobileShortcutButton = ShortcutButton & { repeatable?: boolean };
 export type MobilePlatform = "ios" | "android" | "other";
+export type StickyModifier = "ctrl" | "alt" | "esc";
 export type ShortcutSection = { title: string; rows: ShortcutButton[][] };
 export type TerminalThemeOption = {
 	id: string;
@@ -362,5 +363,35 @@ export function sessionModeLabel(mode: SessionMode) {
 			return "Monitor";
 		default:
 			return "Shell";
+	}
+}
+
+export function mobilePlatformLabel(platform: MobilePlatform) {
+	switch (platform) {
+		case "ios":
+			return "iPhone / iPad";
+		case "android":
+			return "Android";
+		default:
+			return "Mobile";
+	}
+}
+
+export function mobileShortcutHint(mode: SessionMode) {
+	switch (mode) {
+		case "shell":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		case "vim":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		case "claude":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		case "pager":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		case "repl":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		case "monitor":
+			return "长按修饰键锁定 · 可切换极简 / 展开";
+		default:
+			return "长按修饰键锁定 · 按住方向键、⌫、Enter 可连发";
 	}
 }
