@@ -626,6 +626,12 @@
   :global(html) {
     height: 100%;
     background: #020617;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  :global(html::-webkit-scrollbar) {
+    display: none;
   }
 
   :global(body) {
@@ -636,6 +642,16 @@
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     overscroll-behavior: none;
     -webkit-tap-highlight-color: transparent;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  :global(body::-webkit-scrollbar) {
+    display: none;
+  }
+
+  :global(*::-webkit-scrollbar) {
+    display: none;
   }
 
   :global(button),
