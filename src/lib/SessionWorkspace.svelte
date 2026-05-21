@@ -72,6 +72,8 @@
   let phoneCompactLayout = $state(false);
   let mobilePanel = $state<MobilePanel | null>(null);
   let mobilePlatform = $state<MobilePlatform>("other");
+  let keyboardOpen = $state(false);
+  let maxViewportHeight = $state(0);
 
   function currentTheme() {
     return terminalThemes.find((item) => item.id === themeId)?.theme ?? terminalThemes[0].theme;
@@ -135,6 +137,21 @@
     return "other";
   }
 
+  function detectKeyboardOpen() {
+    if (typeof window === "undefined" || !window.visualViewport) {
+      keyboardOpen = false;
+      return;
+    }
+    const vv = window.visualViewport;
+    const currentHeight = vv.height;
+    if (currentHeight > maxViewportHeight) {
+      maxViewportHeight = currentHeight;
+    }
+    // 阈值：当前高度比最大记录高度少了 >15%，且差值 >120px
+    const diff = maxViewportHeight - currentHeight;
+    keyboardOpen = compactLayout && diff > Math.max(120, maxViewportHeight * 0.15);
+  }
+
   function closeMobilePanel() {
     if (!compactLayout) return;
     mobilePanel = null;
@@ -144,18 +161,28 @@
   onMount(() => {
     mobilePlatform = detectMobilePlatform();
     syncLayoutState();
-    const handleResize = () => syncLayoutState();
+    detectKeyboardOpen();
+
+    const handleResize = () => {
+      syncLayoutState();
+      detectKeyboardOpen();
+    };
+
     window.addEventListener("resize", handleResize);
-    window.visualViewport?.addEventListener("resize", handleResize);
+    window.visualViewport?.addEventListener("resize", detectKeyboardOpen);
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      window.visualViewport?.removeEventListener("resize", handleResize);
+      window.visualViewport?.removeEventListener("resize", detectKeyboardOpen);
     };
   });
 </script>
 
-<section class:phone-compact={phoneCompactLayout} class="workspace-shell">
+<section
+  class:phone-compact={phoneCompactLayout}
+  class:keyboard-open={keyboardOpen}
+  class="workspace-shell"
+>
   <SessionHeader
     {agentName}
     {status}
@@ -210,6 +237,7 @@
       {ptys}
       {activePtyId}
       {compactLayout}
+      {keyboardOpen}
       {busy}
       onSelectPty={onSelectPty}
       onCreatePty={onCreatePty}
@@ -253,7 +281,7 @@
       </div>
     {/if}
 
-    {#if compactLayout}
+    {#if compactLayout && !keyboardOpen}
       <MobileShortcutBar
         {compactLayout}
         {phoneCompactLayout}
@@ -269,7 +297,7 @@
       />
     {/if}
 
-    {#if mobilePanel}
+    {#if mobilePanel && !keyboardOpen}
       <MobileSheet
         title={mobilePanel === "search"
           ? "搜索终端"
@@ -359,6 +387,10 @@
     opacity: 0.5;
   }
 
+  .workspace-shell.keyboard-open .terminal-stack {
+    height: clamp(14rem, 65dvh, 48rem);
+  }
+
   .terminal-stack {
     min-height: 18rem;
     height: clamp(18rem, 48dvh, 36rem);
@@ -422,9 +454,53 @@
     font-size: 0.76rem;
   }
 
+  .workspace-shell.phone-compact.keyboard-open {
+    gap: 0.45rem;
+    padding-bottom: calc(0.35rem + env(safe-area-inset-bottom));
+  }
+
+  .workspace-shell.phone-compact.keyboard-open .terminal-card {
+    padding: 0.35rem;
+    gap: 0.35rem;
+  }
+
+  .workspace-shell.phone-compact.keyboard-open .terminal-toolbar-card {
+    padding: 0.3rem;
+    gap: 0.3rem;
+  }
+
   @media (max-width: 899px) {
     .workspace-shell {
       gap: 0.8rem;
+    }
+
+    .workspace-shell.keyboard-open {
+      gap: 0.45rem;
+      padding-bottom: calc(0.35rem + env(safe-area-inset-bottom));
+    }
+
+    .workspace-shell.keyboard-open .terminal-card {
+      padding: 0.4rem;
+      gap: 0.4rem;
+    }
+
+    .workspace-shell.keyboard-open .terminal-toolbar-card {
+      padding: 0.35rem;
+      gap: 0.35rem;
+    }
+
+    .workspace-shell.keyboard-open .terminal-toolbar-group {
+      gap: 0.3rem;
+    }
+
+    .workspace-shell.keyboard-open .toolbar-button {
+      min-height: 1.95rem;
+      padding: 0.32rem 0.5rem;
+      font-size: 0.72rem;
+    }
+
+    .workspace-shell.keyboard-open .terminal-stack {
+      height: clamp(12rem, 60dvh, 36rem);
     }
 
     .terminal-toolbar {

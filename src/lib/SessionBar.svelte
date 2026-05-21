@@ -5,6 +5,7 @@
     ptys,
     activePtyId,
     compactLayout,
+    keyboardOpen = false,
     busy,
     onSelectPty,
     onCreatePty,
@@ -17,6 +18,7 @@
     ptys: PtySession[];
     activePtyId: string | null;
     compactLayout: boolean;
+    keyboardOpen?: boolean;
     busy: boolean;
     onSelectPty: (ptyId: string) => void;
     onCreatePty: () => void;
@@ -68,7 +70,7 @@
 {/if}
 
 {#if compactLayout && ptys.length > 0}
-  <div class="panel-card mobile-session-bar">
+  <div class="panel-card mobile-session-bar" class:keyboard-open={keyboardOpen}>
     <div class="mobile-session-inline">
       <label class="mobile-session-picker session-label" for="mobile-pty-select">会话</label>
       <select
@@ -243,6 +245,31 @@
   }
 
   @media (max-width: 899px) {
+    .mobile-session-bar.keyboard-open {
+      padding: 0.3rem;
+      gap: 0.25rem;
+    }
+
+    .mobile-session-bar.keyboard-open .mobile-session-select {
+      min-height: 1.85rem;
+      padding: 0.35rem 0.5rem;
+      font-size: 0.78rem;
+    }
+
+    .mobile-session-bar.keyboard-open .mobile-session-action {
+      min-height: 1.75rem;
+      padding: 0.28rem 0.38rem;
+      font-size: 0.72rem;
+    }
+
+    .mobile-session-bar.keyboard-open .mobile-session-inline {
+      gap: 0.25rem;
+    }
+
+    .mobile-session-bar.keyboard-open .mobile-session-actions {
+      gap: 0.25rem;
+    }
+
     .mobile-session-bar {
       padding: 0.58rem;
       gap: 0.52rem;
