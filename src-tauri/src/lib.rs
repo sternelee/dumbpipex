@@ -1,6 +1,8 @@
 use std::str::FromStr;
 use std::sync::Arc;
 
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use dumbpipex_core::{
     ALPN, ClientMessage, ConnectTicket, PtySessionInfo, ServerMessage, read_frame, write_frame,
@@ -10,7 +12,7 @@ use iroh::endpoint::{Connection, presets};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::{Mutex, mpsc};
-use tracing::warn;
+use tracing::{info, warn};
 
 const REMOTE_EVENT: &str = "remote-event";
 
@@ -63,17 +65,30 @@ async fn connect_ticket(
     disconnect_inner(&state.inner).await.map_err(err_to_string)?;
 
     let ticket = ConnectTicket::from_str(&ticket).map_err(err_to_string)?;
-    let endpoint = Endpoint::bind(presets::N0)
-        .await
-        .context("failed to bind local iroh endpoint")
-        .map_err(err_to_string)?;
-    endpoint.online().await;
 
+    info!("binding iroh endpoint...");
+    let endpoint = tokio::time::timeout(
+        Duration::from_secs(10),
+        Endpoint::bind(presets::N0),
+    )
+    .await
+    .map_err(|_| "iroh endpoint bind timed out after 10s".to_string())?
+    .context("failed to bind local iroh endpoint")
+    .map_err(err_to_string)?;
+    info!("endpoint bound, waiting for online...");
+
+    tokio::time::timeout(Duration::from_secs(15), endpoint.online())
+        .await
+        .map_err(|_| "iroh endpoint online timed out after 15s".to_string())?;
+    info!("endpoint online");
+
+    info!("connecting to remote agent at {:?}...", ticket.endpoint_addr);
     let connection = endpoint
         .connect(ticket.endpoint_addr.clone(), ALPN)
         .await
         .context("failed to connect to remote agent")
         .map_err(err_to_string)?;
+    info!("connection established");
     let (mut send, mut recv) = connection
         .open_bi()
         .await
@@ -301,6 +316,12 @@ fn err_to_string(err: impl ToString) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Android 上必须显式初始化 rustls crypto provider，否则 HTTP/TLS 请求会 panic
+    #[cfg(target_os = "android")]
+    {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+
     tauri::Builder::default()
         .manage(RemoteManager::default())
         .plugin(tauri_plugin_opener::init())

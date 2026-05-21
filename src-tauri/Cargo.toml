@@ -28,3 +28,5 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde.workspace = true
 serde_json.workspace = true
+# Android 上需要显式初始化 rustls crypto provider，否则 reqwest 会 panic："No provider set"
+rustls = { version = "0.23", default-features = false, features = ["ring"] }

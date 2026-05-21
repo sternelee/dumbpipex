@@ -1354,6 +1354,7 @@ dependencies = [
  "anyhow",
  "dumbpipex-core",
  "iroh",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",
