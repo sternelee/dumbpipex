@@ -32,6 +32,7 @@
   let fitAddon: FitAddon | null = null;
   let searchAddon: SearchAddon | null = null;
   let longPressTimer: number | null = null;
+  let resizeObserver: ResizeObserver | null = null;
 
   function base64UrlToBytes(data: string): Uint8Array {
     const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
@@ -65,6 +66,7 @@
   }
 
   function fit() {
+    if (!active || !term) return;
     fitAddon?.fit();
     if (term) {
       onresize?.({ cols: term.cols, rows: term.rows });
@@ -167,10 +169,19 @@
     onregisterApi?.(api);
 
     const disposeData = term.onData((data) => ondata?.(data));
+
+    // ResizeObserver 监听容器尺寸变化（键盘弹出/收起、布局切换）
+    if ("ResizeObserver" in window) {
+      resizeObserver = new ResizeObserver(() => {
+        if (active) fit();
+      });
+      resizeObserver.observe(host);
+    }
+
+    // 兜底：也监听 window / visualViewport resize
     const handleResize = () => {
       if (active) fit();
     };
-
     window.addEventListener("resize", handleResize);
     window.visualViewport?.addEventListener("resize", handleResize);
 
@@ -180,6 +191,7 @@
       cancelLongPress();
       window.removeEventListener("resize", handleResize);
       window.visualViewport?.removeEventListener("resize", handleResize);
+      resizeObserver?.disconnect();
       disposeData.dispose();
       term?.dispose();
     };
@@ -194,7 +206,7 @@
 <div
   class:active
   class="pane"
-  style:display={active ? "block" : "none"}
+  style:display={active ? "flex" : "none"}
   onpointerdown={startLongPress}
   onpointerup={cancelLongPress}
   onpointercancel={cancelLongPress}
@@ -205,18 +217,24 @@
 
 <style>
   .pane {
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    display: none;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    overflow: hidden;
   }
 
   .pane.active {
-    display: block;
+    display: flex;
   }
 
   .terminal-host {
-    height: 100%;
-    min-height: 16rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
     border-radius: 0.75rem;
     overflow: hidden;
     overscroll-behavior: contain;

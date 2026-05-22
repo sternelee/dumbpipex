@@ -44,7 +44,7 @@
   .shortcut-sections {
     display: grid;
     gap: 0.7rem;
-    max-height: min(32svh, 22rem);
+    max-height: min(32vh, 22rem);
     overflow-y: auto;
     padding-right: 0.1rem;
   }

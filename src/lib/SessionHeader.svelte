@@ -247,20 +247,32 @@
     overflow: hidden;
   }
 
+  .workspace-copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .workspace-copy h1 {
     margin: 0;
     font-size: 1.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .workspace-header-meta {
     display: grid;
     gap: 0.35rem;
     margin-top: 0.35rem;
+    min-width: 0;
   }
 
   .workspace-copy p {
     margin: 0;
     color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .mode-chip {

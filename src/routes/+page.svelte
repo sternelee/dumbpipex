@@ -546,6 +546,23 @@
     }
   }
 
+  /* ── Android WebView 键盘适配 ──
+     WebView 弹出键盘时会自动滚动 document 使输入框可见，
+     但此时 body 高度还没同步缩小，滚动后会露出黑色空白。
+     策略：focus 时持续强制 scrollTo(0,0)，覆盖键盘动画窗口期，
+     同时只注入 --app-vh CSS 变量，不直接覆盖 style.height。   */
+  function syncViewportHeight() {
+    if (typeof window === "undefined") return;
+    const h = window.visualViewport?.height ?? window.innerHeight;
+    document.documentElement.style.setProperty("--app-vh", `${h}px`);
+  }
+
+  function resetScroll() {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }
+
   onMount(() => {
     const persisted = readRecoveryState();
     if (persisted) {
@@ -567,10 +584,57 @@
       },
     );
 
+    syncViewportHeight();
+
+    const vv = window.visualViewport;
+    const onResize = () => syncViewportHeight();
+    vv?.addEventListener("resize", onResize);
+    window.addEventListener("resize", onResize);
+
+    let scrollFixTimer: ReturnType<typeof setInterval> | null = null;
+
+    const startScrollFix = () => {
+      resetScroll();
+      if (scrollFixTimer) clearInterval(scrollFixTimer);
+      scrollFixTimer = setInterval(resetScroll, 16);
+      setTimeout(() => {
+        if (scrollFixTimer) {
+          clearInterval(scrollFixTimer);
+          scrollFixTimer = null;
+        }
+        syncViewportHeight();
+        resetScroll();
+      }, 600);
+    };
+
+    const stopScrollFix = () => {
+      if (scrollFixTimer) {
+        clearInterval(scrollFixTimer);
+        scrollFixTimer = null;
+      }
+      setTimeout(() => {
+        syncViewportHeight();
+        resetScroll();
+      }, 150);
+    };
+
+    document.addEventListener("focusin", startScrollFix);
+    document.addEventListener("focusout", stopScrollFix);
+
+    const t1 = setTimeout(syncViewportHeight, 300);
+    const t2 = setTimeout(syncViewportHeight, 800);
+
     return () => {
       cancelReconnect();
       void invoke("disconnect_ticket").catch(() => undefined);
       unlisten?.();
+      vv?.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("focusin", startScrollFix);
+      document.removeEventListener("focusout", stopScrollFix);
+      if (scrollFixTimer) clearInterval(scrollFixTimer);
+      clearTimeout(t1);
+      clearTimeout(t2);
     };
   });
 </script>
@@ -624,10 +688,11 @@
 
 <style>
   :global(html) {
-    height: 100%;
+    height: var(--app-vh, 100vh);
     background: #020617;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    overflow: hidden;
   }
 
   :global(html::-webkit-scrollbar) {
@@ -635,7 +700,7 @@
   }
 
   :global(body) {
-    min-height: 100%;
+    height: var(--app-vh, 100vh);
     margin: 0;
     background: #020617;
     color: #e2e8f0;
@@ -644,6 +709,7 @@
     -webkit-tap-highlight-color: transparent;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    overflow: hidden;
   }
 
   :global(body::-webkit-scrollbar) {
@@ -662,10 +728,19 @@
   }
 
   .app-shell {
-    min-height: 100svh;
+    height: var(--app-vh, 100vh);
+    max-height: var(--app-vh, 100vh);
+    overflow: hidden;
     background:
       radial-gradient(circle at top, rgba(59, 130, 246, 0.18), transparent 30%),
       #020617;
+  }
+
+  /* 禁止 iOS 点击输入时自动缩放 */
+  :global(textarea),
+  :global(input) {
+    font-size: 16px !important;
+    touch-action: manipulation;
   }
 
   @media (max-width: 899px) {

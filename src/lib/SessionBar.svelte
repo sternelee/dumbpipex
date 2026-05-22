@@ -211,6 +211,7 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-width: 0;
     padding: 0.65rem 0.75rem;
     background: rgba(15, 23, 42, 0.88);
     border: 1px solid rgba(148, 163, 184, 0.18);
@@ -365,7 +366,7 @@
     top: calc(100% + 0.4rem);
     right: 0;
     min-width: 16rem;
-    max-width: 80vw;
+    max-width: min(80vw, calc(100vw - 2rem));
     max-height: 60vh;
     overflow-y: auto;
     display: flex;
@@ -456,6 +457,8 @@
     align-items: center;
     gap: 0.35rem;
     flex-shrink: 0;
+    min-width: 0;
+    flex-wrap: wrap;
   }
 
   .action-btn {

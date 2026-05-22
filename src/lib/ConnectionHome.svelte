@@ -110,14 +110,20 @@
 
 <style>
   .home-shell {
-    min-height: 100svh;
+    height: 100%;
+    max-height: 100%;
+    min-width: 0;
     display: grid;
     gap: 1rem;
-    padding-top: calc(1rem + env(safe-area-inset-top));
+    padding-top: max(1.5rem, calc(1rem + env(safe-area-inset-top)));
     padding-right: calc(1rem + env(safe-area-inset-right));
-    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    padding-bottom: max(1rem, calc(0.5rem + env(safe-area-inset-bottom)));
     padding-left: calc(1rem + env(safe-area-inset-left));
     box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .hero-card,
@@ -135,6 +141,22 @@
     justify-content: space-between;
     gap: 1rem;
     align-items: flex-start;
+    min-width: 0;
+  }
+
+  .hero-copy {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .hero-copy h1 {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .hero-copy p {
+    overflow-wrap: break-word;
+    word-break: break-word;
   }
 
   .hero-copy h1,

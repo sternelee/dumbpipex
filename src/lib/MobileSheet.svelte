@@ -45,7 +45,7 @@
     z-index: 21;
     display: grid;
     gap: 0.9rem;
-    max-height: min(68svh, 34rem);
+    max-height: min(68vh, 34rem);
     overflow: hidden;
     padding: 0.9rem;
     border: 1px solid rgba(148, 163, 184, 0.22);
