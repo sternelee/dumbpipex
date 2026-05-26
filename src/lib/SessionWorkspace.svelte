@@ -342,7 +342,7 @@
       </div>
     {/if}
 
-    {#if compactLayout && !keyboardOpen}
+    {#if compactLayout}
       <MobileShortcutBar
         {compactLayout}
         {phoneCompactLayout}
@@ -354,8 +354,8 @@
         onPaneNotice={onPaneNotice}
         onPaneData={onPaneData}
         onFocusActivePty={onFocusActivePty}
-        onTogglePanel={() => togglePanel("shortcuts")}
       />
+
     {/if}
 
     {#if mobilePanel && !keyboardOpen}

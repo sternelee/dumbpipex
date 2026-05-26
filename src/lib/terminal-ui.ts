@@ -48,7 +48,7 @@ export type PtySession = {
 export type ShortcutButton = { label: string; data: string; hint?: string };
 export type MobileShortcutButton = ShortcutButton & { repeatable?: boolean };
 export type MobilePlatform = "ios" | "android" | "other";
-export type StickyModifier = "ctrl" | "alt" | "esc";
+export type StickyModifier = "ctrl" | "alt" | "esc" | "shift";
 export type ShortcutSection = { title: string; rows: ShortcutButton[][] };
 export type TerminalThemeOption = {
 	id: string;
@@ -251,6 +251,41 @@ export const mobileModeShortcuts: Record<SessionMode, MobileShortcutButton[]> =
 			{ label: "Enter", data: "\r", repeatable: true },
 		],
 	};
+
+/** Special characters always available in mobile shortcut bar */
+export const specialCharGrid: MobileShortcutButton[] = [
+	{ label: "|", data: "|" },
+	{ label: "\\", data: "\\" },
+	{ label: "?", data: "?" },
+	{ label: "-", data: "-" },
+	{ label: ":", data: ":" },
+	{ label: ";", data: ";" },
+	{ label: "~", data: "~" },
+	{ label: "@", data: "@" },
+	{ label: "#", data: "#" },
+	{ label: "$", data: "$" },
+	{ label: "%", data: "%" },
+	{ label: "^", data: "^" },
+	{ label: "&", data: "&" },
+	{ label: "*", data: "*" },
+	{ label: "(", data: "(" },
+	{ label: ")", data: ")" },
+	{ label: "[", data: "[" },
+	{ label: "]", data: "]" },
+	{ label: "{", data: "{" },
+	{ label: "}", data: "}" },
+	{ label: "<", data: "<" },
+	{ label: ">", data: ">" },
+	{ label: "/", data: "/" },
+	{ label: ".", data: "." },
+	{ label: ",", data: "," },
+	{ label: "!", data: "!" },
+	{ label: "=", data: "=" },
+	{ label: "+", data: "+" },
+	{ label: "'", data: "'" },
+	{ label: '"', data: '"' },
+	{ label: "`", data: "`" },
+];
 
 const mobileShortcutPriority: Record<MobilePlatform, string[]> = {
 	ios: [
