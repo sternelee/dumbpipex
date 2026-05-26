@@ -26,6 +26,7 @@
   } = $props();
 
   let host = $state<HTMLDivElement>(null as any);
+  let mobileInput = $state<HTMLTextAreaElement>(null as any);
 
   const decoder = new TextDecoder();
   let term = $state<Terminal | null>(null);
@@ -33,6 +34,38 @@
   let searchAddon: SearchAddon | null = null;
   let longPressTimer: number | null = null;
   let resizeObserver: ResizeObserver | null = null;
+
+  /* ── detect if we're on mobile WebView ── */
+  function isMobileWebView(): boolean {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent.toLowerCase();
+    return /iphone|ipad|android/.test(ua);
+  }
+
+  /* ── mobile input bridge ── */
+
+  function handleMobileInput() {
+    const el = mobileInput;
+    if (!el || !term) return;
+    const text = el.value;
+    if (!text) return;
+    // Use Array.from to iterate over Unicode code points (handles emoji, CJK)
+    for (const char of Array.from(text)) {
+      term.input(char);
+    }
+    el.value = "";
+  }
+
+
+  function handleMobileKeyDown(e: KeyboardEvent) {
+    if (!term) return;
+    if (e.key === "Enter" || e.key === "Backspace" || e.key === "Tab" ||
+        e.key === "Escape" || e.key.startsWith("Arrow") ||
+        e.ctrlKey || e.metaKey || e.altKey) {
+      e.preventDefault();
+      (term as any)._core._keyDown(e);
+    }
+  }
 
   function base64UrlToBytes(data: string): Uint8Array {
     const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
@@ -54,7 +87,6 @@
       onnotice?.("没有可复制的文本");
       return false;
     }
-
     try {
       await navigator.clipboard.writeText(text);
       onnotice?.("已复制终端文本");
@@ -74,7 +106,11 @@
   }
 
   function focus() {
-    term?.focus();
+    if (isMobileWebView()) {
+      mobileInput?.focus();
+    } else {
+      term?.focus();
+    }
   }
 
   function finish() {
@@ -172,7 +208,6 @@
 
     const disposeData = term.onData((data) => ondata?.(data));
 
-    // ResizeObserver 监听容器尺寸变化（键盘弹出/收起、布局切换）
     if ("ResizeObserver" in window) {
       resizeObserver = new ResizeObserver(() => {
         if (active) fit();
@@ -180,7 +215,6 @@
       resizeObserver.observe(host);
     }
 
-    // 兜底：也监听 window / visualViewport resize
     const handleResize = () => {
       if (active) fit();
     };
@@ -215,6 +249,16 @@
   onpointerleave={cancelLongPress}
 >
   <div bind:this={host} class="terminal-host"></div>
+  <!-- Mobile keyboard input bridge: hidden textarea captures iOS input -->
+  <textarea
+    bind:this={mobileInput}
+    class="mobile-input-bridge"
+    autocomplete="off"
+    autocapitalize="off"
+    spellcheck="false"
+    oninput={handleMobileInput}
+    onkeydown={handleMobileKeyDown}
+  ></textarea>
 </div>
 
 <style>
@@ -223,6 +267,7 @@
     min-height: 0;
     min-width: 0;
     display: none;
+    position: relative;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     overflow: hidden;
@@ -239,6 +284,30 @@
     width: 100%;
     border-radius: 0.75rem;
     overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  /* Hidden textarea bridge for mobile keyboard input.
+     Must be focusable to trigger the virtual keyboard,
+     but visually hidden so it doesn't interfere with the terminal. */
+  .mobile-input-bridge {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    font-size: 16px;
+    color: transparent;
+    caret-color: transparent;
+    -webkit-user-select: text;
+    user-select: text;
+    z-index: 1;
+    pointer-events: auto;
     overscroll-behavior: contain;
   }
 </style>
