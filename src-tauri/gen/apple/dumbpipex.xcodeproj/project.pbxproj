@@ -18,6 +18,8 @@
 		A9A309318BCD26B52EEC357B /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A45DF5A5DB20D44F8DE9E26A /* Security.framework */; };
 		C63F36C1AA255630AB294A81 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 83B09C874BD2E850219D1515 /* Assets.xcassets */; };
 		E43B1794822F025B057CD687 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 1CB11844BD7C13E8EC47D142 /* LaunchScreen.storyboard */; };
+		ECACAE1E0E0D88C93B8D11F1 /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF8DB576B7B5F8BB0759802C /* SystemConfiguration.framework */; };
+		EDCB3120BEB7DF4F7EEE3F52 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = EE0FFC18188448A04C5C2D83 /* libapp.a */; };
 		F423A9197A4C395C052223CC /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = EAEF184FB1A0A6A1D53CDC44 /* CoreGraphics.framework */; };
 /* End PBXBuildFile section */
 
@@ -35,10 +37,12 @@
 		83B09C874BD2E850219D1515 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9E898BA80EBCBA8407525DFF /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		A45DF5A5DB20D44F8DE9E26A /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		AF8DB576B7B5F8BB0759802C /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		B3D892830ECC87E0E480A71F /* dumbpipex_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = dumbpipex_iOS.entitlements; sourceTree = "<group>"; };
 		C23738C2DF1BB2D48FC8C9CC /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
 		E8FD44EC76FE7EC4ED268D18 /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
 		EAEF184FB1A0A6A1D53CDC44 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		EE0FFC18188448A04C5C2D83 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		FA28C8122A585BE5869D6399 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -53,6 +57,7 @@
 				9DFAF1470F90EB565D45DFEA /* MetalKit.framework in Frameworks */,
 				0B2338E06A9A1DD30A2234B7 /* QuartzCore.framework in Frameworks */,
 				A9A309318BCD26B52EEC357B /* Security.framework in Frameworks */,
+				ECACAE1E0E0D88C93B8D11F1 /* SystemConfiguration.framework in Frameworks */,
 				5C0D1D41C6E6D0EF0E66CC52 /* UIKit.framework in Frameworks */,
 				1D0299F1BB2F38505368E671 /* WebKit.framework in Frameworks */,
 			);
@@ -73,8 +78,17 @@
 		0B9A5F8D15768542ACF67C39 /* Externals */ = {
 			isa = PBXGroup;
 			children = (
+				486C2B4CCFAB2552562524E4 /* arm64 */,
 			);
 			path = Externals;
+			sourceTree = "<group>";
+		};
+		486C2B4CCFAB2552562524E4 /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+				B47A873B506EDE145069FD6A /* release */,
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 		54D0E381FCACA282E9940105 /* src */ = {
@@ -93,6 +107,14 @@
 				E8FD44EC76FE7EC4ED268D18 /* bindings.h */,
 			);
 			path = bindings;
+			sourceTree = "<group>";
+		};
+		B47A873B506EDE145069FD6A /* release */ = {
+			isa = PBXGroup;
+			children = (
+				EE0FFC18188448A04C5C2D83 /* libapp.a */,
+			);
+			path = release;
 			sourceTree = "<group>";
 		};
 		C259FDC803B410F5A1C1BE7B /* dumbpipex_iOS */ = {
@@ -128,6 +150,7 @@
 				605D5D2404D01D76613414D1 /* MetalKit.framework */,
 				7CAAF0FFB3DA3C4F444469A5 /* QuartzCore.framework */,
 				A45DF5A5DB20D44F8DE9E26A /* Security.framework */,
+				AF8DB576B7B5F8BB0759802C /* SystemConfiguration.framework */,
 				4824FCC76E8E382DA5924095 /* UIKit.framework */,
 				0F796FFA24C19F573F88199E /* WebKit.framework */,
 			);
@@ -148,6 +171,13 @@
 				2953BA7F5A7E84512A28A8B1 /* dumbpipex_iOS.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		"TEMP_72C7828E-19AC-4718-9711-F4BF31201A49" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -182,6 +212,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					C452DC879782CA654537A308 = {
+						DevelopmentTeam = UJ8NW4N779;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 50BED0D7CB4A35ACAE944623 /* Build configuration list for PBXProject "dumbpipex" */;
@@ -211,6 +245,7 @@
 				C63F36C1AA255630AB294A81 /* Assets.xcassets in Resources */,
 				E43B1794822F025B057CD687 /* LaunchScreen.storyboard in Resources */,
 				A5676A353F88A2C732B4D812 /* assets in Resources */,
+				EDCB3120BEB7DF4F7EEE3F52 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -318,6 +353,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dumbpipex_iOS/dumbpipex_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = UJ8NW4N779;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -332,7 +369,7 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sternelee.dumbpipex;
-				PRODUCT_NAME = dumbpipex;
+				PRODUCT_NAME = "dumbpipex";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
@@ -412,6 +449,8 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = dumbpipex_iOS/dumbpipex_iOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = UJ8NW4N779;
 				ENABLE_BITCODE = NO;
 				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -426,7 +465,7 @@
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.sternelee.dumbpipex;
-				PRODUCT_NAME = dumbpipex;
+				PRODUCT_NAME = "dumbpipex";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
