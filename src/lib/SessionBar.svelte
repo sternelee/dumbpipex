@@ -10,10 +10,6 @@
     onSelectPty,
     onCreatePty,
     onCloseActivePty,
-    onFocusActivePty,
-    onCopyActiveTerminal,
-    onPaneData,
-    onPaneNotice,
   }: {
     ptys: PtySession[];
     activePtyId: string | null;
@@ -23,10 +19,6 @@
     onSelectPty: (ptyId: string) => void;
     onCreatePty: () => void;
     onCloseActivePty: () => void;
-    onFocusActivePty: () => void;
-    onCopyActiveTerminal: () => void;
-    onPaneData: (data: string) => void;
-    onPaneNotice: (message: string) => void;
   } = $props();
 
   let containerWidth = $state(0);
@@ -75,21 +67,6 @@
     onSelectPty(ptyId);
   }
 
-  async function pasteFromClipboard() {
-    if (!hasActivePty()) return;
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text) {
-        onPaneNotice("剪贴板为空");
-        return;
-      }
-      onPaneData(text);
-      onPaneNotice("已粘贴剪贴板");
-    } catch {
-      onPaneNotice("无法读取剪贴板");
-    }
-  }
-
   // 点击外部关闭下拉
   function handleClickOutside(event: MouseEvent) {
     if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
@@ -101,7 +78,8 @@
   function observeTab(node: HTMLElement, ptyId: string) {
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const w = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+        const w =
+          entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
         if (tabWidths.get(ptyId) !== w) {
           tabWidths.set(ptyId, w);
           tabWidths = new Map(tabWidths);
@@ -109,14 +87,22 @@
       }
     });
     ro.observe(node);
-    return { destroy() { ro.disconnect(); } };
+    return {
+      destroy() {
+        ro.disconnect();
+      },
+    };
   }
 </script>
 
 <svelte:window onclick={handleClickOutside} />
 
 {#if ptys.length > 0}
-  <div class="session-bar" class:compact={compactLayout} class:keyboard-open={keyboardOpen}>
+  <div
+    class="session-bar"
+    class:compact={compactLayout}
+    class:keyboard-open={keyboardOpen}
+  >
     <div class="tabs-scroll" bind:clientWidth={containerWidth}>
       <div class="tabs-row">
         {#each visiblePtys as pty (pty.pty_id)}
@@ -134,7 +120,9 @@
                 {compactLayout ? getPtyShortName(pty.shell) : pty.pty_id}
               </span>
               {#if !compactLayout}
-                <span class="tab-meta">{pty.shell}{pty.exited ? " · exited" : ""}</span>
+                <span class="tab-meta"
+                  >{pty.shell}{pty.exited ? " · exited" : ""}</span
+                >
               {/if}
             </span>
             {#if pty.exited}
@@ -148,7 +136,7 @@
             <button
               class="tab more-tab"
               class:active={dropdownOpen}
-              onclick={() => dropdownOpen = !dropdownOpen}
+              onclick={() => (dropdownOpen = !dropdownOpen)}
               title={`${hiddenPtys.length} 个隐藏会话`}
             >
               <span class="tab-content">
@@ -167,10 +155,15 @@
                     class:exited={pty.exited}
                     onclick={() => selectPty(pty.pty_id)}
                   >
-                    <span class="item-dot" class:active={pty.pty_id === activePtyId}></span>
+                    <span
+                      class="item-dot"
+                      class:active={pty.pty_id === activePtyId}
+                    ></span>
                     <span class="item-info">
                       <span class="item-name">{pty.pty_id}</span>
-                      <span class="item-shell">{pty.shell}{pty.exited ? " · exited" : ""}</span>
+                      <span class="item-shell"
+                        >{pty.shell}{pty.exited ? " · exited" : ""}</span
+                      >
                     </span>
                   </button>
                 {/each}
@@ -181,26 +174,22 @@
       </div>
     </div>
 
-    <div class="tab-actions">
-      <button class="action-btn" onclick={onCreatePty} disabled={busy} title="新建 PTY">
-        <span class="action-icon">＋</span>
-        {#if !compactLayout}<span class="action-label">新建</span>{/if}
+    <div class="tab-inline-actions">
+      <button
+        class="tab-action-btn"
+        onclick={onCreatePty}
+        disabled={busy}
+        title="新建 PTY (⌘T)"
+      >
+        <span class="tab-action-icon">＋</span>
       </button>
-      <button class="action-btn" onclick={onCopyActiveTerminal} disabled={!hasActivePty()} title="复制">
-        <span class="action-icon">⎘</span>
-        {#if !compactLayout}<span class="action-label">复制</span>{/if}
-      </button>
-      <button class="action-btn" onclick={() => void pasteFromClipboard()} disabled={!hasActivePty() || busy} title="粘贴">
-        <span class="action-icon">⎗</span>
-        {#if !compactLayout}<span class="action-label">粘贴</span>{/if}
-      </button>
-      <button class="action-btn" onclick={onFocusActivePty} disabled={!hasActivePty()} title="聚焦键盘">
-        <span class="action-icon">⌨</span>
-        {#if !compactLayout}<span class="action-label">键盘</span>{/if}
-      </button>
-      <button class="action-btn close-btn" onclick={onCloseActivePty} disabled={!hasActivePty() || busy} title="关闭">
-        <span class="action-icon">✕</span>
-        {#if !compactLayout}<span class="action-label">关闭</span>{/if}
+      <button
+        class="tab-action-btn close-btn"
+        onclick={onCloseActivePty}
+        disabled={!hasActivePty() || busy}
+        title="关闭 (⌘W)"
+      >
+        <span class="tab-action-icon">✕</span>
       </button>
     </div>
   </div>
@@ -245,10 +234,10 @@
     color: inherit;
     font: inherit;
     font-weight: 600;
-    cursor: pointer;
     touch-action: manipulation;
     white-space: nowrap;
     flex-shrink: 0;
+
     transition:
       border-color 180ms ease,
       background-color 180ms ease,
@@ -268,7 +257,9 @@
   .tab.active {
     border-color: rgba(59, 130, 246, 0.8);
     background: rgba(37, 99, 235, 0.18);
-    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(96, 165, 250, 0.15);
+    box-shadow:
+      0 0 0 1px rgba(59, 130, 246, 0.25),
+      inset 0 1px 0 rgba(96, 165, 250, 0.15);
   }
 
   .tab.exited {
@@ -404,7 +395,7 @@
     color: inherit;
     font: inherit;
     text-align: left;
-    cursor: pointer;
+
     touch-action: manipulation;
     transition: background-color 140ms ease;
   }
@@ -451,59 +442,54 @@
     color: #94a3b8;
   }
 
-  /* ===== Actions ===== */
-  .tab-actions {
+  /* ===== Inline Actions ===== */
+  .tab-inline-actions {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.2rem;
     flex-shrink: 0;
-    min-width: 0;
-    flex-wrap: wrap;
   }
 
-  .action-btn {
+  .tab-action-btn {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.5rem 0.75rem;
-    min-height: 2.4rem;
-    border: 1px solid rgba(148, 163, 184, 0.24);
-    border-radius: 0.8rem;
-    background: rgba(15, 23, 42, 0.92);
-    color: inherit;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 0.4rem;
+    background: transparent;
+    color: #94a3b8;
     font: inherit;
-    font-weight: 600;
-    font-size: 0.85rem;
-    cursor: pointer;
-    touch-action: manipulation;
-    white-space: nowrap;
+    font-size: 0.8rem;
     transition:
       border-color 140ms ease,
-      background-color 140ms ease;
+      background-color 140ms ease,
+      color 140ms ease;
   }
 
-  .action-btn:hover:not(:disabled) {
-    border-color: rgba(148, 163, 184, 0.45);
-    background: rgba(30, 41, 59, 0.92);
+  .tab-action-btn:hover:not(:disabled) {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: rgba(30, 41, 59, 0.6);
+    color: #e2e8f0;
   }
 
-  .action-btn:active:not(:disabled) {
-    transform: scale(0.97);
+  .tab-action-btn:active:not(:disabled) {
+    transform: scale(0.95);
   }
 
-  .action-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  .tab-action-btn:disabled {
+    opacity: 0.3;
   }
 
-  .action-icon {
-    font-size: 0.95rem;
+  .tab-action-icon {
     line-height: 1;
   }
 
-  .close-btn:hover:not(:disabled) {
-    border-color: rgba(239, 68, 68, 0.45);
-    background: rgba(127, 29, 29, 0.2);
+  .tab-action-btn.close-btn:hover:not(:disabled) {
+    border-color: rgba(239, 68, 68, 0.4);
+    background: rgba(127, 29, 29, 0.25);
+    color: #fca5a5;
   }
 
   /* ===== Compact / Mobile ===== */
@@ -518,8 +504,8 @@
   }
 
   .session-bar.compact .tab {
-    padding: 0.38rem 0.58rem;
-    min-height: 2.1rem;
+    padding: 0.18rem 0.58rem;
+    min-height: 1.6rem;
     border-radius: 0.7rem;
   }
 
@@ -541,18 +527,14 @@
     font-size: 0.68rem;
   }
 
-  .session-bar.compact .tab-actions {
-    gap: 0.25rem;
+  .session-bar.compact .tab-inline-actions {
+    gap: 0.18rem;
   }
 
-  .session-bar.compact .action-btn {
-    padding: 0.38rem 0.48rem;
-    min-height: 2rem;
-    border-radius: 0.65rem;
-  }
-
-  .session-bar.compact .action-icon {
-    font-size: 0.9rem;
+  .session-bar.compact .tab-action-btn {
+    width: 1.55rem;
+    height: 1.55rem;
+    border-radius: 0.35rem;
   }
 
   /* Keyboard open - ultra compact */
@@ -577,14 +559,10 @@
     font-size: 0.62rem;
   }
 
-  .session-bar.compact.keyboard-open .action-btn {
-    padding: 0.28rem 0.38rem;
-    min-height: 1.75rem;
-    border-radius: 0.55rem;
-  }
-
-  .session-bar.compact.keyboard-open .action-icon {
-    font-size: 0.82rem;
+  .session-bar.compact.keyboard-open .tab-action-btn {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 0.3rem;
   }
 
   .session-bar.compact.keyboard-open .dropdown-menu {
@@ -619,8 +597,8 @@
     }
 
     .tab {
-      padding: 0.38rem 0.58rem;
-      min-height: 2.1rem;
+      padding: 0.18rem 0.58rem;
+      min-height: 1.6rem;
       border-radius: 0.7rem;
     }
 
@@ -632,19 +610,14 @@
       padding: 0.38rem 0.55rem;
     }
 
-    .tab-actions {
-      gap: 0.25rem;
+    .tab-inline-actions {
+      gap: 0.18rem;
     }
 
-    .action-btn {
-      padding: 0.38rem 0.48rem;
-      min-height: 2rem;
-      border-radius: 0.65rem;
-      font-size: 0.8rem;
-    }
-
-    .action-icon {
-      font-size: 0.9rem;
+    .tab-action-btn {
+      width: 1.55rem;
+      height: 1.55rem;
+      border-radius: 0.35rem;
     }
 
     .dropdown-menu {

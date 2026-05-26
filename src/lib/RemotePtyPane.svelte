@@ -28,7 +28,7 @@
   let host = $state<HTMLDivElement>(null as any);
 
   const decoder = new TextDecoder();
-  let term: Terminal | null = null;
+  let term = $state<Terminal | null>(null);
   let fitAddon: FitAddon | null = null;
   let searchAddon: SearchAddon | null = null;
   let longPressTimer: number | null = null;
@@ -131,9 +131,11 @@
   }
 
   $effect(() => {
-    if (!term) return;
-    term.options.fontSize = fontSize;
-    term.options.theme = theme;
+    const t = term;
+    if (!t) return;
+    t.options.fontSize = fontSize;
+    t.options.theme = { ...theme };
+    if (t.rows > 0) t.refresh(0, t.rows - 1);
     queueMicrotask(() => fit());
   });
 
