@@ -392,6 +392,8 @@
   class:phone-compact={phoneCompactLayout}
   class:keyboard-open={keyboardOpen}
   class="workspace-shell"
+  data-testid="session-workspace"
+  data-phase={sessionPhase}
 >
   <MenuBar
     {agentName}
@@ -439,6 +441,9 @@
         class:split={!!splitPtyId}
         class:dragging={isDraggingSplit}
         bind:this={splitContainerEl}
+        data-testid="terminal-stack"
+        data-pty-count={ptys.length}
+        data-split={!!splitPtyId}
       >
         {#if !splitPtyId}
           {#each ptys as pty (pty.pty_id)}
