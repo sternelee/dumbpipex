@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import type { SessionPhase } from "$lib/terminal-ui";
 
   let {
@@ -20,6 +21,8 @@
     onShellChange: (value: string) => void;
     onConnect: () => void;
   } = $props();
+
+  let ticketEl = $state<HTMLTextAreaElement | null>(null);
 
   function phaseLabel(phase: SessionPhase) {
     switch (phase) {
@@ -48,6 +51,13 @@
   const isConnecting = $derived(
     sessionPhase === "connecting" || sessionPhase === "creating_pty",
   );
+
+  // `autocorrect` is a non-standard iOS Safari/WebKit attribute and
+  // not in svelte-html's HTMLAttributes, so we set it imperatively on
+  // the bound node. On Android/desktop WebView it's a harmless no-op.
+  onMount(() => {
+    if (ticketEl) ticketEl.setAttribute("autocorrect", "off");
+  });
 </script>
 
 <section class="home-shell">
@@ -77,11 +87,13 @@
       <label class="field">
         <span>Agent ticket</span>
         <textarea
+          bind:this={ticketEl}
           rows="5"
           placeholder="粘贴本地 dumbpipex-cli 输出的 ticket"
           value={ticket}
           autocapitalize="off"
           autocomplete="off"
+          inputmode="text"
           spellcheck={false}
           enterkeyhint="done"
           aria-invalid={showTicketHint}
