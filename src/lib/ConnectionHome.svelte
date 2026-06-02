@@ -136,7 +136,7 @@
           <span class="status-spinner" aria-hidden="true"></span>
           正在连接...
         {:else}
-          Connect
+          连接
         {/if}
       </button>
 
