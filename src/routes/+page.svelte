@@ -140,7 +140,9 @@
       // Stop hammering the agent: leave auto-reconnect armed but do
       // not schedule another timer. The user can press "connect" on
       // the home screen to retry, which resets the counter.
-      status = `已停止自动重连（达到 ${MAX_RECONNECT_ATTEMPTS} 次上限），请手动重连`;
+      const message = `已停止自动重连（达到 ${MAX_RECONNECT_ATTEMPTS} 次上限），请手动重连`;
+      status = message;
+      toast(message, "warning", 8000);
       return;
     }
     const delay = Math.min(1000 * 2 ** reconnectAttempt, 8000);
