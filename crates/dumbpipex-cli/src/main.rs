@@ -97,6 +97,14 @@ struct ManagedState {
     backlog_bytes: usize,
     attached: Option<AttachedClient>,
     detached_at: Option<Instant>,
+    /// True while we are replaying backlog to a freshly attached client.
+    /// Live `Output` events arriving during this window are appended to
+    /// the backlog (not sent to the client) so the client sees strict
+    /// FIFO order: every chunk of backlog first, then every chunk of
+    /// live output that was produced during the replay.
+    resuming: bool,
+    /// Chunks that arrived while `resuming` was true, in arrival order.
+    resume_buffer: Vec<String>,
     exited: bool,
     exit_code: Option<i32>,
 }
@@ -294,6 +302,8 @@ impl ManagedSession {
                 backlog_bytes: 0,
                 attached: Some(AttachedClient { client_id, sender }),
                 detached_at: None,
+                resuming: false,
+                resume_buffer: Vec::new(),
                 exited: false,
                 exit_code: None,
             }),
@@ -302,7 +312,15 @@ impl ManagedSession {
 
     async fn record_output(&self, data: String) -> Option<DispatchTarget> {
         let mut state = self.state.lock().await;
-        push_backlog(&mut state, data.clone());
+        if state.resuming {
+            // Live output arrived mid-replay. Hold it in `resume_buffer`
+            // so the replay can flush it AFTER the backlog, then merge
+            // it back into the backlog so a future resume still sees
+            // the complete history.
+            state.resume_buffer.push(data);
+        } else {
+            push_backlog(&mut state, data.clone());
+        }
         state.attached.as_ref().map(|attached| DispatchTarget {
             client_id: attached.client_id.clone(),
             sender: attached.sender.clone(),
@@ -389,6 +407,12 @@ impl ManagedSession {
             sender,
         });
         state.detached_at = None;
+        // Mark that we are about to replay the backlog. Live output
+        // events arriving during the replay are buffered in
+        // `resume_buffer` and will be flushed (in order) once the
+        // replay completes via `finalize_resume`.
+        state.resuming = true;
+        state.resume_buffer.clear();
 
         Ok(ResumeOutcome::Attached {
             dispatch: PtyCreatedDispatch {
@@ -401,6 +425,21 @@ impl ManagedSession {
             },
             backlog: state.backlog.iter().cloned().collect(),
         })
+    }
+
+    /// Called by `resume_pty` after all backlog chunks have been
+    /// delivered to the client. Returns the live-output chunks that
+    /// arrived during the replay, in arrival order. These chunks are
+    /// also pushed back into the backlog so a future resume still sees
+    /// the complete history.
+    async fn finalize_resume(&self) -> Vec<String> {
+        let mut state = self.state.lock().await;
+        state.resuming = false;
+        let buffered = std::mem::take(&mut state.resume_buffer);
+        for chunk in &buffered {
+            push_backlog(&mut state, chunk.clone());
+        }
+        buffered
     }
 
     async fn detach_if_client(&self, client_id: &str) {
@@ -639,6 +678,26 @@ impl SessionManager {
         }
 
         for chunk in backlog {
+            if let Err(err) = send_message(
+                &sender,
+                ServerMessage::PtyOutput {
+                    pty_id: created.pty_id.clone(),
+                    data: chunk,
+                },
+            )
+            .await
+            {
+                session.detach_if_client(&client_id).await;
+                return Err(err);
+            }
+        }
+
+        // Replay complete: release the resume lock and flush any live
+        // output that arrived during the replay, in strict FIFO order
+        // (no further live output can interleave because we hold the
+        // session.state lock when flipping `resuming` back to false).
+        let live_during_replay = session.finalize_resume().await;
+        for chunk in live_during_replay {
             if let Err(err) = send_message(
                 &sender,
                 ServerMessage::PtyOutput {
