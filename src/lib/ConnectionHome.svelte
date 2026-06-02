@@ -337,10 +337,12 @@
       font-size: 16px; /* iOS: prevent zoom; also Android legibility */
     }
 
-    .field-hint {
-      font-size: 0.82rem;
-    }
+    /* .field-hint is overridden to 0.85rem in the dedicated block
+       below; keep this slot empty so the cascade resolves once. */
 
+    /* Status pill is the only at-a-glance health indicator on the
+       connection home; bumping it to 0.95rem on phones keeps it
+       readable without inflating the pill beyond a single line. */
     .status-pill {
       font-size: 0.95rem;
       padding: 0.45rem 0.85rem;
@@ -368,6 +370,15 @@
     color: #64748b;
     font-size: 0.78rem;
     line-height: 1.35;
+  }
+
+  @media (max-width: 680px) {
+    /* Field hint is the only place users see validation feedback and
+       ticket-format expectations; on phones it must stay readable at
+       arm's length (~0.85rem ≈ 13.6px) without crowding the field. */
+    .field-hint {
+      font-size: 0.85rem;
+    }
   }
 
   .field-hint.error {
