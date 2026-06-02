@@ -406,6 +406,20 @@
     font-size: 0.92rem;
   }
 
+  /* The status string can be a long backend error message. Clamp to
+     2 lines on phones so a multi-line exception trace doesn't push
+     the rest of the card down; users can tap to see more if we add
+     a detail view later. */
+  @media (max-width: 680px) {
+    .meta {
+      font-size: 0.88rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+  }
+
   ol {
     margin: 0;
     padding-left: 1.25rem;
