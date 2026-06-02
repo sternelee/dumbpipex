@@ -393,7 +393,7 @@
     touch-action: manipulation;
     padding: 0.55rem 0.65rem;
     min-height: 2.75rem; /* 44px */
-    min-width: 3.2rem;   /* wide enough for ⌃×N */
+    min-width: 3.6rem;   /* wide enough for ⌃×N count badge */
     text-align: center;
     transition: all 120ms ease;
   }
