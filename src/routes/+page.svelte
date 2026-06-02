@@ -630,20 +630,16 @@
   }
 
   /* ── Android WebView 键盘适配 ──
-     WebView 弹出键盘时会自动滚动 document 使输入框可见，
-     但此时 body 高度还没同步缩小，滚动后会露出黑色空白。
-     策略：focus 时持续强制 scrollTo(0,0)，覆盖键盘动画窗口期，
-     同时只注入 --app-vh CSS 变量，不直接覆盖 style.height。   */
+     We don't fight the WebView with scrollTo(0,0) intervals: the
+     root <html> and <body> are already overflow:hidden +
+     height:var(--app-vh), so there's no scroll position to force.
+     We just keep --app-vh in sync with the visual viewport so
+     the layout reflows to fit the new (smaller) viewport as the
+     keyboard animates in. */
   function syncViewportHeight() {
     if (typeof window === "undefined") return;
     const h = window.visualViewport?.height ?? window.innerHeight;
     document.documentElement.style.setProperty("--app-vh", `${h}px`);
-  }
-
-  function resetScroll() {
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
-    document.body.scrollTop = 0;
   }
 
   onMount(() => {
@@ -674,35 +670,16 @@
     vv?.addEventListener("resize", onResize);
     window.addEventListener("resize", onResize);
 
-    let scrollFixTimer: ReturnType<typeof setInterval> | null = null;
-
-    const startScrollFix = () => {
-      resetScroll();
-      if (scrollFixTimer) clearInterval(scrollFixTimer);
-      scrollFixTimer = setInterval(resetScroll, 16);
-      setTimeout(() => {
-        if (scrollFixTimer) {
-          clearInterval(scrollFixTimer);
-          scrollFixTimer = null;
-        }
-        syncViewportHeight();
-        resetScroll();
-      }, 600);
+    // Re-sync at intervals after focus transitions, since some
+    // WebViews report stale visualViewport.height mid-keyboard
+    // animation. Cheap (single DOM write per call) and bounded.
+    const resyncAfterFocus = () => {
+      syncViewportHeight();
+      setTimeout(syncViewportHeight, 100);
+      setTimeout(syncViewportHeight, 350);
     };
-
-    const stopScrollFix = () => {
-      if (scrollFixTimer) {
-        clearInterval(scrollFixTimer);
-        scrollFixTimer = null;
-      }
-      setTimeout(() => {
-        syncViewportHeight();
-        resetScroll();
-      }, 150);
-    };
-
-    document.addEventListener("focusin", startScrollFix);
-    document.addEventListener("focusout", stopScrollFix);
+    document.addEventListener("focusin", resyncAfterFocus);
+    document.addEventListener("focusout", resyncAfterFocus);
 
     const t1 = setTimeout(syncViewportHeight, 300);
     const t2 = setTimeout(syncViewportHeight, 800);
@@ -714,9 +691,8 @@
       unlisten?.();
       vv?.removeEventListener("resize", onResize);
       window.removeEventListener("resize", onResize);
-      document.removeEventListener("focusin", startScrollFix);
-      document.removeEventListener("focusout", stopScrollFix);
-      if (scrollFixTimer) clearInterval(scrollFixTimer);
+      document.removeEventListener("focusin", resyncAfterFocus);
+      document.removeEventListener("focusout", resyncAfterFocus);
       clearTimeout(t1);
       clearTimeout(t2);
     };
