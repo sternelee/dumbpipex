@@ -34,6 +34,7 @@
   let searchAddon: SearchAddon | null = null;
   let longPressTimer: number | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let focused = $state(false);
 
   /* ── detect if we're on mobile WebView ── */
   function isMobileWebView(): boolean {
@@ -187,10 +188,15 @@
     term = new Terminal({
       convertEol: true,
       cursorBlink: true,
+      cursorStyle: "bar",
+      cursorWidth: 2,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
       fontSize,
+      lineHeight: 1.2,
       theme,
       scrollback: 5000,
+      smoothScrollDuration: 60,
+      allowProposedApi: true,
     });
 
     fitAddon = new FitAddon();
@@ -239,14 +245,33 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class:active
   class="pane"
+  class:focused={focused}
   style:display={active ? "flex" : "none"}
-  onpointerdown={startLongPress}
+  onpointerdown={(e) => {
+    startLongPress(e);
+    if (!focused) {
+      focused = true;
+      focus();
+    }
+  }}
   onpointerup={cancelLongPress}
   onpointercancel={cancelLongPress}
   onpointerleave={cancelLongPress}
+  onclick={() => {
+    if (!focused) {
+      focused = true;
+      focus();
+    }
+  }}
+  role="application"
+  aria-label="remote terminal"
+  tabindex="0"
 >
   <div bind:this={host} class="terminal-host"></div>
   <!-- Mobile keyboard input bridge: hidden textarea captures iOS input -->
@@ -271,10 +296,18 @@
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     overflow: hidden;
+    border-radius: 0.75rem;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+    transition: outline-color 180ms ease, box-shadow 180ms ease;
   }
 
   .pane.active {
     display: flex;
+  }
+
+  .pane.focused {
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
   }
 
   .terminal-host {
