@@ -192,11 +192,14 @@
   .hero-copy h1 {
     overflow-wrap: break-word;
     word-break: break-word;
+    font-size: 1.6rem; /* explicit override of UA h1 default */
   }
 
   .hero-copy p {
     overflow-wrap: break-word;
     word-break: break-word;
+    font-size: 0.95rem;
+    line-height: 1.4;
   }
 
   .hero-copy h1,
@@ -399,6 +402,52 @@
     .connect-card,
     .tips-card {
       padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  @media (max-width: 680px) {
+    /* Compact the hero on phones so the Connect button sits in the
+       thumb zone (upper 2/3 of the viewport), not below the fold. */
+    .hero-card {
+      padding: 0.85rem 0.95rem;
+      gap: 0.7rem;
+    }
+
+    .hero-copy h1 {
+      font-size: 1.3rem;
+      line-height: 1.25;
+    }
+
+    .hero-copy p {
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
+    .eyebrow {
+      margin-bottom: 0.35rem;
+      font-size: 0.78rem;
+    }
+
+    .status-pill {
+      font-size: 0.85rem;
+      padding: 0.32rem 0.7rem;
+    }
+
+    .home-grid {
+      gap: 0.75rem;
+    }
+
+    .connect-card,
+    .tips-card {
+      padding: 0.85rem 0.95rem;
+    }
+
+    .field {
+      gap: 0.35rem;
+    }
+
+    .field span {
+      font-size: 0.88rem;
     }
   }
 
