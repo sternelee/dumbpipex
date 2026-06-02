@@ -379,10 +379,6 @@
     background: rgba(30, 41, 59, 0.92);
   }
 
-  .tab:active {
-    transform: scale(0.97);
-  }
-
   .tab.active {
     border-color: rgba(59, 130, 246, 0.8);
     background: rgba(37, 99, 235, 0.18);
@@ -670,10 +666,6 @@
     border-color: rgba(148, 163, 184, 0.35);
     background: rgba(30, 41, 59, 0.6);
     color: #e2e8f0;
-  }
-
-  .tab-action-btn:active:not(:disabled) {
-    transform: scale(0.95);
   }
 
   .tab-action-btn:disabled {

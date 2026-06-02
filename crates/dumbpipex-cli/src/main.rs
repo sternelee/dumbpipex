@@ -263,7 +263,12 @@ impl PtyProcess {
     fn shutdown_blocking(mut self) {
         self.shutting_down.store(true, Ordering::Relaxed);
 
-        if let Ok(mut child) = self.child.lock() {
+        // try_lock avoids deadlock with the wait_thread (which holds
+        // this lock during child.wait()). If the wait_thread already
+        // owns the lock we skip the kill — closing the master PTY
+        // below will send SIGHUP to the child process group and the
+        // shell should exit on its own.
+        if let Ok(mut child) = self.child.try_lock() {
             let _ = child.kill();
         }
 
@@ -747,6 +752,26 @@ impl SessionManager {
             .await
             .remove(pty_id)
             .with_context(|| format!("received close for unknown PTY: {pty_id}"))?;
+
+        // Notify the attached client that this PTY is being closed
+        // *before* we tear down the process. Once we call shutdown()
+        // the reader/wait threads fire PtyEvent::Exited, but the
+        // session is already gone from our map so handle_exit cannot
+        // find a dispatch target and silently drops the event. The
+        // frontend relies on PtyExited to remove the tab.
+        {
+            let state = session.state.lock().await;
+            if let Some(attached) = &state.attached {
+                let _ = attached
+                    .sender
+                    .send(ServerMessage::PtyExited {
+                        pty_id: pty_id.to_string(),
+                        exit_code: None,
+                    })
+                    .await;
+            }
+        }
+
         session.shutdown().await;
         Ok(())
     }

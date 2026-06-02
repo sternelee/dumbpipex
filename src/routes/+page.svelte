@@ -581,7 +581,12 @@
         ptyInputBuffers.delete(payload.pty_id);
         ptyResumeTokens.delete(payload.pty_id);
         const pty = getPty(payload.pty_id);
-        if (pty) {
+        if (payload.exit_code === null || payload.exit_code === undefined) {
+          // close_pty — remove tab entirely
+          if (pty) {
+            ptys = ptys.filter((item) => item.pty_id !== payload.pty_id);
+          }
+        } else if (pty) {
           upsertPty({
             ...pty,
             exited: true,
@@ -591,7 +596,9 @@
 
         const api = ptyApis.get(payload.pty_id);
         api?.finish();
-        api?.writeText(`\r\n[pty exited] code=${payload.exit_code ?? "unknown"}\r\n`);
+        if (payload.exit_code !== null && payload.exit_code !== undefined) {
+          api?.writeText(`\r\n[pty exited] code=${payload.exit_code}\r\n`);
+        }
 
         if (activePtyId === payload.pty_id) {
           const fallback =

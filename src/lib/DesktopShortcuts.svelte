@@ -107,10 +107,6 @@
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
   }
 
-  .shortcut:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
   .shortcut-label {
     font-size: 0.92rem;
     line-height: 1.1;

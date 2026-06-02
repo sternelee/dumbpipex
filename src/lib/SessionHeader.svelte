@@ -115,10 +115,6 @@
     background: rgba(127, 29, 29, 0.2);
   }
 
-  .mobile-disconnect:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
   .mobile-disconnect:disabled {
     opacity: 0.5;
   }

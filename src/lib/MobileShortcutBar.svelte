@@ -379,7 +379,6 @@
     transition: background-color 120ms ease, border-color 120ms ease;
   }
 
-  .quick-btn:active { transform: scale(0.96); }
   .quick-btn:disabled { opacity: 0.35; }
 
   .modifier-chip {
@@ -397,8 +396,6 @@
     text-align: center;
     transition: all 120ms ease;
   }
-  .modifier-chip:active { transform: scale(0.95); }
-
   .modifier-chip.modifier-active {
     border-color: rgba(96, 165, 250, 0.7);
     background: rgba(30, 64, 175, 0.34);

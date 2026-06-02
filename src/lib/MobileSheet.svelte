@@ -240,10 +240,6 @@
     min-height: 2.16rem;
   }
 
-  .quick-shortcut-action:active {
-    transform: scale(0.97);
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .mobile-sheet,
     .mobile-sheet-backdrop {

@@ -110,6 +110,7 @@
   let baseWindowHeight = $state(0);
   let baseViewportHeight = $state(0);
   let focusInputCount = $state(0);
+  let focusDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   function currentViewportHeight() {
     return window.visualViewport?.height ?? window.innerHeight;
@@ -128,17 +129,36 @@
 
     // Two signals: viewport-shrink (best on portrait) OR a text input
     // currently focused (best on landscape, where WebViews sometimes
-    // don't resize at all). Whichever fires wins.
+    // don't resize at all). Viewport wins immediately; focus-only
+    // changes are debounced to avoid premature layout shift before the
+    // viewport actually resizes.
     const viewportSays = baseline > 0 && diff > threshold;
     const focusSays = focusInputCount > 0;
     const next = viewportSays || focusSays;
 
+    if (focusDebounceTimer) {
+      clearTimeout(focusDebounceTimer);
+      focusDebounceTimer = null;
+    }
+
     if (next !== keyboardOpen) {
-      keyboardOpen = next;
-      if (next) {
-        // 键盘弹出时关闭浮动面板、收起 header
-        mobilePanel = null;
-        applyMobilePanelState(null);
+      if (viewportSays || (focusSays === keyboardOpen)) {
+        // viewport confirmed, or focus says keyboard closed — apply immediately
+        keyboardOpen = next;
+        if (next) {
+          mobilePanel = null;
+          applyMobilePanelState(null);
+        }
+      } else {
+        // only focus signal for opening — debounce to wait for viewport
+        focusDebounceTimer = setTimeout(() => {
+          focusDebounceTimer = null;
+          if (focusInputCount > 0 && !keyboardOpen) {
+            keyboardOpen = true;
+            mobilePanel = null;
+            applyMobilePanelState(null);
+          }
+        }, 200);
       }
     }
   }
@@ -173,13 +193,19 @@
     // 延迟记录，避开启动时可能的 transient resize
     requestAnimationFrame(() => {
       baseWindowHeight = Math.max(baseWindowHeight, window.innerHeight);
-      baseViewportHeight = Math.max(baseViewportHeight, currentViewportHeight());
+      baseViewportHeight = Math.max(
+        baseViewportHeight,
+        currentViewportHeight(),
+      );
       detectKeyboard();
     });
   }
 
   function currentTheme() {
-    return terminalThemes.find((item) => item.id === themeId)?.theme ?? terminalThemes[0].theme;
+    return (
+      terminalThemes.find((item) => item.id === themeId)?.theme ??
+      terminalThemes[0].theme
+    );
   }
 
   function adjustFontSize(delta: number) {
@@ -401,7 +427,7 @@
     {fontSize}
     {showSearch}
     compact={compactLayout}
-    hasActivePty={hasActivePty}
+    {hasActivePty}
     themes={terminalThemes}
     {themeId}
     onNewTab={onCreatePty}
@@ -410,7 +436,7 @@
     onSplitLeft={handleSplitLeft}
     splitActive={!!splitPtyId}
     onCloseSplit={closeSplit}
-    onDisconnect={onDisconnect}
+    {onDisconnect}
     onIncreaseFont={increaseFont}
     onDecreaseFont={decreaseFont}
     onResetFont={resetFont}
@@ -425,15 +451,14 @@
       {compactLayout}
       {keyboardOpen}
       {busy}
-      onSelectPty={onSelectPty}
-      onCreatePty={onCreatePty}
-      onCloseActivePty={onCloseActivePty}
+      {onSelectPty}
+      {onCreatePty}
+      {onCloseActivePty}
     />
 
     {#if !compactLayout && showSearch}
-      <SearchPanel bind:searchQuery onSearch={onSearch} onClose={closeSearch} />
+      <SearchPanel bind:searchQuery {onSearch} onClose={closeSearch} />
     {/if}
-
 
     {#if ptys.length > 0}
       <div
@@ -476,7 +501,9 @@
             {/if}
             <RemotePtyPane
               active
-              flexBasisPct={splitLeft ? (1 - splitRatio) * 100 : splitRatio * 100}
+              flexBasisPct={splitLeft
+                ? (1 - splitRatio) * 100
+                : splitRatio * 100}
               {fontSize}
               theme={currentTheme()}
               ondata={onPaneData}
@@ -523,7 +550,10 @@
     {:else}
       <div class="empty-terminal">
         <h2>暂无远程终端</h2>
-        <p>连接 agent 后会自动创建第一个 PTY，后续可继续创建多个会话并在这里切换。</p>
+        <p>
+          连接 agent 后会自动创建第一个
+          PTY，后续可继续创建多个会话并在这里切换。
+        </p>
       </div>
     {/if}
 
@@ -533,14 +563,13 @@
         {phoneCompactLayout}
         {activeMode}
         {mobilePlatform}
-        hasActivePty={hasActivePty}
+        {hasActivePty}
         {busy}
-        onSendShortcut={onSendShortcut}
-        onPaneNotice={onPaneNotice}
-        onPaneData={onPaneData}
-        onFocusActivePty={onFocusActivePty}
+        {onSendShortcut}
+        {onPaneNotice}
+        {onPaneData}
+        {onFocusActivePty}
       />
-
     {/if}
 
     {#if mobilePanel && !keyboardOpen}
@@ -550,12 +579,11 @@
         onClose={closeMobilePanel}
       >
         {#if showSearch}
-          <SearchPanel bind:searchQuery onSearch={onSearch} onClose={closeMobilePanel} />
+          <SearchPanel bind:searchQuery {onSearch} onClose={closeMobilePanel} />
         {:else if showShortcuts}
-          <DesktopShortcuts hasActivePty={hasActivePty} {busy} onSendShortcut={onSendShortcut} />
+          <DesktopShortcuts {hasActivePty} {busy} {onSendShortcut} />
         {/if}
       </MobileSheet>
-
     {/if}
   </section>
 </section>
@@ -590,9 +618,7 @@
     border-radius: 1rem;
     box-shadow: 0 10px 40px rgba(15, 23, 42, 0.45);
     overflow: hidden;
-    transition: padding 200ms ease, gap 200ms ease;
   }
-
 
   .terminal-stack {
     flex: 1 1 auto;
@@ -600,7 +626,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    transition: height 200ms ease;
   }
 
   /* split layout */
@@ -671,7 +696,9 @@
     height: 1.6rem;
     border-radius: 999px;
     background: rgba(148, 163, 184, 0.55);
-    transition: background-color 140ms ease, height 140ms ease;
+    transition:
+      background-color 140ms ease,
+      height 140ms ease;
   }
 
   .split-divider:hover .split-grip,
@@ -693,7 +720,6 @@
     transition: opacity 200ms ease;
   }
 
-
   .empty-terminal h2 {
     margin: 0;
   }
@@ -713,23 +739,6 @@
     border-radius: 0.85rem;
   }
 
-  /* ===== keyboard-open (通用) ===== */
-
-  .workspace-shell.keyboard-open {
-    gap: 0.4rem;
-    /* When keyboard is up the top safe-area shrinks to 0 in most
-       WebViews; preserve a small breathing room above the menu bar. */
-    padding-top: max(0.4rem, env(safe-area-inset-top, 0.4rem));
-    padding-bottom: max(0.2rem, env(safe-area-inset-bottom, 0.2rem));
-  }
-
-  .workspace-shell.keyboard-open .terminal-card {
-    padding: 0.4rem;
-    gap: 0.4rem;
-    border-radius: 0.75rem;
-  }
-
-
   /* ===== responsive (max-width: 899px) ===== */
 
   @media (max-width: 899px) {
@@ -745,18 +754,6 @@
       padding: 0.55rem;
       gap: 0.55rem;
       border-radius: 0.85rem;
-    }
-
-    .workspace-shell.keyboard-open {
-      gap: 0.35rem;
-      padding-top: max(0.35rem, env(safe-area-inset-top, 0.35rem));
-      padding-bottom: max(0.15rem, env(safe-area-inset-bottom, 0.15rem));
-    }
-
-    .workspace-shell.keyboard-open .terminal-card {
-      padding: 0.35rem;
-      gap: 0.35rem;
-      border-radius: 0.7rem;
     }
   }
 </style>

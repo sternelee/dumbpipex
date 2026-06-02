@@ -465,10 +465,6 @@
     background: rgba(30, 41, 59, 0.6);
   }
 
-  .ghost-btn:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
   .ghost-btn:disabled {
     opacity: 0.4;
   }

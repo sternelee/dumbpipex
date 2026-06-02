@@ -242,10 +242,6 @@
     color: #dbeafe;
   }
 
-  .toolbar-button:active:not(:disabled) {
-    transform: scale(0.97);
-  }
-
   .toolbar-button:focus-visible {
     outline: none;
     border-color: rgba(59, 130, 246, 0.65);

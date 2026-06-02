@@ -15,17 +15,21 @@ Three crates:
 
 | Task | Command |
 |------|---------|
+| Install JS deps (first time) | `pnpm install` |
 | Frontend dev server | `npm run dev` |
 | Tauri desktop dev | `npm run tauri dev` |
 | Tauri desktop build | `npm run tauri build` |
 | SvelteKit/TypeScript check | `npm run check` |
 | Rust workspace check | `cargo check --workspace` |
+| Rust workspace test | `cargo test --workspace` |
 | Run local agent | `cargo run -p dumbpipex-cli` |
 | Agent with persistent ticket | `cargo run -p dumbpipex-cli -- --persistent-ticket` |
 | Agent with custom shell | `cargo run -p dumbpipex-cli -- --shell /bin/zsh` |
-| Run single Rust test | `cargo test --manifest-path src-tauri/Cargo.toml <test_name>` |
+| Run single Rust test | `cargo test -p <crate> <test_name>` |
 
-Package manager is `pnpm` (workspace root has `pnpm-workspace.yaml`). `package.json` scripts use `npm` but Tauri's `beforeDevCommand`/`beforeBuildCommand` in `tauri.conf.json` call `npm run dev` / `npm run build`.
+Package manager is `pnpm` (workspace root has `pnpm-workspace.yaml`). `package.json` scripts use `npm` but Tauri's `beforeDevCommand`/`beforeBuildCommand` in `tauri.conf.json` call `npm run dev` / `npm run build`. If you change package manager invocation in one place, update the other.
+
+For Svelte component conventions, mobile patterns, and code-style rules see `AGENTS.md` (single source of truth for the contributor guide).
 
 ## Frontend architecture
 
