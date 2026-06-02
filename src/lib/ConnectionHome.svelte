@@ -67,7 +67,13 @@
       <h1>P2P remote terminal</h1>
       <p>先连接远程 agent，再进入专门的会话工作区操作终端。</p>
     </div>
-    <div class="status-pill" data-phase={sessionPhase}>
+    <div
+      class="status-pill"
+      data-phase={sessionPhase}
+      role="status"
+      aria-live="polite"
+      aria-label={`连接状态: ${phaseLabel(sessionPhase)}`}
+    >
       {#if isConnecting}
         <span class="status-spinner" aria-hidden="true"></span>
       {:else}
