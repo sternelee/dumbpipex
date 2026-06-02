@@ -321,6 +321,16 @@
     box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.4);
   }
 
+  /* On a phone the active pane is always the one filling the
+     viewport, so a "focused" outline carries no information and just
+     clips the terminal by 1px. Desktop keeps the ring for mouse
+     keyboard navigation. */
+  @media (max-width: 680px) {
+    .pane.focused {
+      box-shadow: none;
+    }
+  }
+
   .terminal-host {
     flex: 1 1 auto;
     min-height: 0;
