@@ -58,6 +58,32 @@
   onMount(() => {
     if (ticketEl) ticketEl.setAttribute("autocorrect", "off");
   });
+
+  // Paste the clipboard into the ticket field. On phones, clipboard
+  // permissions are tight: navigator.clipboard.readText() may reject
+  // outside a user gesture, so we wrap the call in a button click.
+  // Falls back to focusing the textarea so the user can long-press →
+  // paste manually.
+  let pasteHint = $state<string | null>(null);
+  async function pasteFromClipboard() {
+    if (!navigator.clipboard?.readText) {
+      pasteHint = "此设备不支持自动粘贴，请长按输入框手动粘贴";
+      ticketEl?.focus();
+      return;
+    }
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        onTicketChange(text);
+        pasteHint = null;
+      } else {
+        pasteHint = "剪贴板为空";
+      }
+    } catch {
+      pasteHint = "无法读取剪贴板，请长按输入框手动粘贴";
+      ticketEl?.focus();
+    }
+  }
 </script>
 
 <section class="home-shell">
@@ -107,6 +133,17 @@
           oninput={(event) => onTicketChange((event.currentTarget as HTMLTextAreaElement).value)}
           disabled={busy}
         ></textarea>
+        <div class="ticket-actions">
+          <button
+            type="button"
+            class="ghost-btn"
+            onclick={pasteFromClipboard}
+            disabled={busy}
+          >从剪贴板粘贴</button>
+          {#if pasteHint}
+            <span class="paste-hint">{pasteHint}</span>
+          {/if}
+        </div>
         <small id="ticket-hint" class="field-hint" class:error={showTicketHint}>
           {#if showTicketHint}
             Ticket 格式无效，应为 URL-safe base64 编码（仅 A-Z、a-z、0-9、_、-）
@@ -391,9 +428,6 @@
   }
 
   @media (max-width: 680px) {
-    /* Field hint is the only place users see validation feedback and
-       ticket-format expectations; on phones it must stay readable at
-       arm's length (~0.85rem ≈ 13.6px) without crowding the field. */
     .field-hint {
       font-size: 0.85rem;
     }
@@ -401,6 +435,48 @@
 
   .field-hint.error {
     color: #fca5a5;
+  }
+
+  .ticket-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .ghost-btn {
+    align-self: flex-start;
+    padding: 0.45rem 0.7rem;
+    border: 1px dashed rgba(148, 163, 184, 0.35);
+    border-radius: 0.65rem;
+    background: transparent;
+    color: #cbd5e1;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 500;
+    min-height: 2.4rem;
+    touch-action: manipulation;
+    transition: border-color 140ms ease, color 140ms ease, background-color 140ms ease;
+  }
+
+  .ghost-btn:hover:not(:disabled) {
+    border-color: rgba(96, 165, 250, 0.55);
+    color: #e2e8f0;
+    background: rgba(30, 41, 59, 0.6);
+  }
+
+  .ghost-btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .ghost-btn:disabled {
+    opacity: 0.4;
+  }
+
+  .paste-hint {
+    color: #94a3b8;
+    font-size: 0.8rem;
+    line-height: 1.3;
   }
 
   textarea[aria-invalid="true"] {
