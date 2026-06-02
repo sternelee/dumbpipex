@@ -719,11 +719,26 @@ impl SessionManager {
         };
 
         if let Some(target) = session.record_output(data.clone()).await {
-            if send_message(&target.sender, ServerMessage::PtyOutput { pty_id, data })
-                .await
-                .is_err()
-            {
-                session.detach_if_client(&target.client_id).await;
+            // Use `try_send` so a slow client does not back-pressure the
+            // PTY reader thread (which would block the local shell).
+            // We always keep the full chunk in the backlog; only the
+            // live dispatch is dropped when the client channel is full.
+            // The user can recover missed output via ResumePty + backlog
+            // replay.
+            match target.sender.try_send(ServerMessage::PtyOutput {
+                pty_id: pty_id.clone(),
+                data,
+            }) {
+                Ok(()) => {}
+                Err(mpsc::error::TrySendError::Full(_)) => {
+                    warn!(
+                        "client {} is slow; dropping live output chunk for {} (kept in backlog)",
+                        target.client_id, pty_id
+                    );
+                }
+                Err(mpsc::error::TrySendError::Closed(_)) => {
+                    session.detach_if_client(&target.client_id).await;
+                }
             }
         }
     }
@@ -741,14 +756,29 @@ impl SessionManager {
         };
 
         if let Some(target) = session.mark_exited(exit_code).await {
-            let _ = send_message(
-                &target.sender,
-                ServerMessage::PtyExited {
-                    pty_id,
-                    exit_code,
-                },
+            // Exited is critical but still bounded: cap the wait so a
+            // deadlocked client does not stall the event loop.
+            let message = ServerMessage::PtyExited {
+                pty_id: pty_id.clone(),
+                exit_code,
+            };
+            match tokio::time::timeout(
+                Duration::from_secs(2),
+                send_message(&target.sender, message),
             )
-            .await;
+            .await
+            {
+                Ok(Ok(())) => {}
+                Ok(Err(err)) => {
+                    warn!("failed to send PtyExited for {}: {err:?}", pty_id);
+                }
+                Err(_) => {
+                    warn!(
+                        "timed out sending PtyExited for {} to client {}; dropping",
+                        pty_id, target.client_id
+                    );
+                }
+            }
         }
     }
 
