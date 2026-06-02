@@ -45,7 +45,7 @@
     onSelectPty: (ptyId: string) => void;
     onFocusActivePty: () => void;
     onCopyActiveTerminal: () => void;
-    onSearch: (query: string, direction: "next" | "previous") => void;
+    onSearch: (query: string, direction: "next" | "previous") => boolean;
     onSendShortcut: (data: string) => void;
     onPaneData: (data: string) => void;
     onPaneNotice: (message: string) => void;
@@ -175,6 +175,10 @@
 
   function toggleSearchPanel() {
     showSearch = !showSearch;
+  }
+
+  function closeSearch() {
+    showSearch = false;
   }
 
   function selectTheme(id: string) {
@@ -387,7 +391,7 @@
     />
 
     {#if !compactLayout && showSearch}
-      <SearchPanel bind:searchQuery onSearch={onSearch} />
+      <SearchPanel bind:searchQuery onSearch={onSearch} onClose={closeSearch} />
     {/if}
 
 
@@ -503,7 +507,7 @@
         onClose={closeMobilePanel}
       >
         {#if showSearch}
-          <SearchPanel bind:searchQuery onSearch={onSearch} />
+          <SearchPanel bind:searchQuery onSearch={onSearch} onClose={closeMobilePanel} />
         {:else if showShortcuts}
           <DesktopShortcuts hasActivePty={hasActivePty} {busy} onSendShortcut={onSendShortcut} />
         {/if}

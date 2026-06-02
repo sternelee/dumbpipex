@@ -315,12 +315,13 @@
     }
   }
 
-  function searchActiveTerminal(query: string, direction: "next" | "previous") {
+  function searchActiveTerminal(query: string, direction: "next" | "previous"): boolean {
     const api = activeApi();
-    if (!api || !query.trim()) return;
+    if (!api || !query.trim()) return false;
     const found =
       direction === "next" ? api.findNext(query.trim()) : api.findPrevious(query.trim());
     status = found ? `已定位到：${query}` : `未找到：${query}`;
+    return found;
   }
 
   async function copyActiveTerminal() {
