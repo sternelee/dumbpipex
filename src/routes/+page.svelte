@@ -31,6 +31,7 @@
 
   const STORAGE_KEY = "dumbpipex:recovery-state";
   const MAX_RECONNECT_ATTEMPTS = 10;
+  const KEEPALIVE_INTERVAL_MS = 20_000;
 
   let ticket = $state("");
   let shell = $state("");
@@ -52,6 +53,7 @@
   const ptyResumeTokens = new Map<string, string>();
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempt = 0;
+  let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
   function isBusy() {
     return (
@@ -107,6 +109,27 @@
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+  }
+
+  function startKeepalive() {
+    stopKeepalive();
+    // Send a Ping every 20s so relay connections and idle NAT mappings
+    // stay warm. The agent already replies with Pong; we just need the
+    // bytes to traverse the path in both directions to keep middleboxes
+    // from dropping the flow.
+    keepaliveTimer = setInterval(() => {
+      if (!connected) return;
+      void invoke("ping_remote").catch((error) => {
+        status = `keepalive 失败: ${String(error)}`;
+      });
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  function stopKeepalive() {
+    if (keepaliveTimer) {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = null;
     }
   }
 
@@ -331,6 +354,7 @@
       autoReconnectEnabled = true;
       reconnectAttempt = 0;
       writeRecoveryState();
+      startKeepalive();
       const resumed = await resumeExistingSessions(result.sessions);
       if (!resumed) {
         void createRemotePty();
@@ -352,6 +376,7 @@
   async function disconnect() {
     if (isBusy()) return;
     cancelReconnect();
+    stopKeepalive();
     reconnectAttempt = 0;
     sessionPhase = "disconnecting";
     manualDisconnectPending = true;
@@ -483,6 +508,7 @@
             ? `连接断开: ${payload.reason}`
             : "连接已断开";
         sessionPhase = manualDisconnectPending ? "idle" : "connecting";
+        stopKeepalive();
         resetPtyState();
         writeRecoveryState();
         if (manualDisconnectPending) {
@@ -671,6 +697,7 @@
 
     return () => {
       cancelReconnect();
+      stopKeepalive();
       void invoke("disconnect_ticket").catch(() => undefined);
       unlisten?.();
       vv?.removeEventListener("resize", onResize);
