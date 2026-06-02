@@ -277,10 +277,18 @@
   tabindex="0"
 >
   <div bind:this={host} class="terminal-host"></div>
-  <!-- Mobile keyboard input bridge: hidden textarea captures iOS input -->
+  <!-- Hidden textarea bridge for mobile keyboard input.
+     xterm.js already has its own hidden textarea for input; this
+     extra bridge exists so we can call .focus() on it from JS
+     (some WebView keyboards ignore the xterm internal textarea's
+     blur/focus sequence). It MUST stay pointer-events: none and
+     unfocusable so touches fall through to the xterm canvas and
+     long-press text selection keeps working. -->
   <textarea
     bind:this={mobileInput}
     class="mobile-input-bridge"
+    tabindex="-1"
+    aria-hidden="true"
     autocomplete="off"
     autocapitalize="off"
     spellcheck="false"
@@ -324,8 +332,11 @@
   }
 
   /* Hidden textarea bridge for mobile keyboard input.
-     Must be focusable to trigger the virtual keyboard,
-     but visually hidden so it doesn't interfere with the terminal. */
+     xterm.js has its own hidden textarea; this is a *second*
+     bridge we only focus() to force the virtual keyboard open
+     in tricky WebView situations. It must NOT intercept
+     pointer events — that would block all touches to the
+     xterm canvas and break long-press text selection. */
   .mobile-input-bridge {
     position: absolute;
     left: 0;
@@ -340,10 +351,10 @@
     font-size: 16px;
     color: transparent;
     caret-color: transparent;
-    -webkit-user-select: text;
-    user-select: text;
-    z-index: 1;
-    pointer-events: auto;
+    -webkit-user-select: none;
+    user-select: none;
+    pointer-events: none;
+    z-index: -1;
     overscroll-behavior: contain;
   }
 </style>
