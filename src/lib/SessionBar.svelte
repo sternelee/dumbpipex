@@ -210,6 +210,7 @@
             class="tab"
             class:active={pty.pty_id === activePtyId}
             class:exited={pty.exited}
+            aria-current={pty.pty_id === activePtyId ? "page" : undefined}
             use:observeTab={pty.pty_id}
             onclick={() => selectPty(pty.pty_id)}
             title={`${pty.pty_id} · ${pty.shell}${pty.exited ? " · exited" : ""}`}
@@ -279,6 +280,7 @@
                     class="dropdown-item"
                     class:active={pty.pty_id === activePtyId}
                     class:exited={pty.exited}
+                    aria-current={pty.pty_id === activePtyId ? "page" : undefined}
                     onclick={() => selectPty(pty.pty_id)}
                   >
                     <span
