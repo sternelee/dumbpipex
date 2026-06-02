@@ -187,6 +187,13 @@
   });
 
   onMount(() => {
+    // On a phone the 60ms smooth-scroll animation is just lag — the
+    // user tapped and is waiting. Disable the animation entirely on
+    // touch-primary devices; the cost of the eased redraw on every
+    // scroll event is wasted on hardware that's already at 60fps.
+    const isCoarsePointer =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(pointer: coarse)").matches;
     term = new Terminal({
       convertEol: true,
       cursorBlink: true,
@@ -197,7 +204,7 @@
       lineHeight: 1.2,
       theme,
       scrollback: 5000,
-      smoothScrollDuration: 60,
+      smoothScrollDuration: isCoarsePointer ? 0 : 60,
       allowProposedApi: true,
     });
 
