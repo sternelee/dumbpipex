@@ -89,6 +89,73 @@
     }
   }
 
+  // Horizontal swipe between tabs on the tabs-scroll container. We
+  // defer the axis decision until ~8px of travel so vertical scrolling
+  // still works, and only fire the tab switch when the swipe passes a
+  // 60px threshold (and is mostly horizontal). The action binds
+  // non-passive listeners so we can preventDefault the browser's
+  // back-swipe gesture once the axis is decided.
+  function bindSwipe(
+    node: HTMLDivElement,
+    options: { onSwipeLeft: () => void; onSwipeRight: () => void },
+  ) {
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    let axis: "h" | "v" | null = null;
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      active = true;
+      axis = null;
+    };
+    const onMove = (event: TouchEvent) => {
+      if (!active) return;
+      const touch = event.touches[0];
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
+      if (axis === null) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        axis = Math.abs(dx) > Math.abs(dy) * 1.4 ? "h" : "v";
+      }
+      if (axis === "h") event.preventDefault();
+    };
+    const onEnd = (event: TouchEvent) => {
+      if (!active) return;
+      active = false;
+      const a = axis;
+      axis = null;
+      if (a !== "h") return;
+      const touch = event.changedTouches[0];
+      if (!touch) return;
+      const dx = touch.clientX - startX;
+      if (Math.abs(dx) < 60) return;
+      if (dx < 0) options.onSwipeLeft();
+      else options.onSwipeRight();
+    };
+    const onCancel = () => {
+      active = false;
+      axis = null;
+    };
+    node.addEventListener("touchstart", onStart, { passive: true });
+    node.addEventListener("touchmove", onMove, { passive: false });
+    node.addEventListener("touchend", onEnd, { passive: true });
+    node.addEventListener("touchcancel", onCancel, { passive: true });
+    return {
+      update(next: typeof options) {
+        options = next;
+      },
+      destroy() {
+        node.removeEventListener("touchstart", onStart);
+        node.removeEventListener("touchmove", onMove);
+        node.removeEventListener("touchend", onEnd);
+        node.removeEventListener("touchcancel", onCancel);
+      },
+    };
+  }
+
   // ResizeObserver action 测量标签宽度
   function observeTab(node: HTMLElement, ptyId: string) {
     const ro = new ResizeObserver((entries) => {
@@ -119,7 +186,24 @@
     class:compact={compactLayout}
     class:keyboard-open={keyboardOpen}
   >
-    <div class="tabs-scroll" bind:clientWidth={containerWidth}>
+    <div
+      class="tabs-scroll"
+      bind:clientWidth={containerWidth}
+      use:bindSwipe={{
+        onSwipeLeft: () => {
+          const idx = visiblePtys.findIndex((p) => p.pty_id === activePtyId);
+          if (idx < 0) return;
+          const next = visiblePtys[idx + 1];
+          if (next) onSelectPty(next.pty_id);
+        },
+        onSwipeRight: () => {
+          const idx = visiblePtys.findIndex((p) => p.pty_id === activePtyId);
+          if (idx < 0) return;
+          const prev = visiblePtys[idx - 1];
+          if (prev) onSelectPty(prev.pty_id);
+        },
+      }}
+    >
       <div class="tabs-row">
         {#each visiblePtys as pty (pty.pty_id)}
           <button
@@ -254,6 +338,7 @@
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
+    touch-action: pan-y;
   }
 
   .tabs-row {
