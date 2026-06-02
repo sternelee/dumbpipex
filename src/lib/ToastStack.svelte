@@ -65,6 +65,13 @@
       class="toast"
       data-kind={t.kind}
       role={t.kind === "error" ? "alert" : "status"}
+      aria-label={t.kind === "error"
+        ? `错误: ${t.message}`
+        : t.kind === "warning"
+          ? `警告: ${t.message}`
+          : t.kind === "success"
+            ? `成功: ${t.message}`
+            : `通知: ${t.message}`}
     >
       <span class="toast-icon" aria-hidden="true">{iconFor(t.kind)}</span>
       <span class="toast-message">{t.message}</span>
