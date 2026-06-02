@@ -31,6 +31,7 @@
   };
 
   const STORAGE_KEY = "dumbpipex:recovery-state";
+  const STORAGE_VERSION = 2;
   const MAX_RECONNECT_ATTEMPTS = 10;
   const KEEPALIVE_INTERVAL_MS = 20_000;
 
@@ -77,9 +78,22 @@
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
-      const parsed = JSON.parse(raw) as PersistedRecoveryState;
-      if (parsed?.version !== 1) return null;
-      return parsed;
+      const parsed = JSON.parse(raw) as { version?: number } & Record<string, unknown>;
+      // Forward-migrate. v1 (initial schema) had no per-PTY
+      // `mode` field; default to "shell" on read. Unknown future
+      // versions are rejected to avoid a corrupted store taking down
+      // the boot path.
+      if (parsed?.version === 1) {
+        const v1 = parsed as unknown as { ptys?: Array<Record<string, unknown>> };
+        if (Array.isArray(v1.ptys)) {
+          for (const pty of v1.ptys) {
+            if (typeof pty.mode !== "string") pty.mode = "shell";
+          }
+        }
+        return parsed as unknown as PersistedRecoveryState;
+      }
+      if (parsed?.version !== STORAGE_VERSION) return null;
+      return parsed as PersistedRecoveryState;
     } catch {
       return null;
     }
@@ -89,7 +103,7 @@
     if (typeof localStorage === "undefined") return;
 
     const persisted: PersistedRecoveryState = {
-      version: 1,
+      version: STORAGE_VERSION,
       ticket,
       shell,
       autoReconnect: autoReconnectEnabled,
