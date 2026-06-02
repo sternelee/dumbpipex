@@ -575,18 +575,30 @@
   }
 
   .split-divider {
+    /* Visual width: 6px. Hit zone: 28px (44px target not possible in
+       a 2-pane horizontal split; 28px is the compromise). */
+    position: relative;
     width: 6px;
     flex-shrink: 0;
     flex-grow: 0;
     background: rgba(148, 163, 184, 0.18);
     cursor: col-resize;
-    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
     touch-action: none;
     user-select: none;
     transition: background-color 140ms ease;
+  }
+
+  /* Invisible hit-area extension on phone */
+  .split-divider::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -11px;
+    right: -11px;
   }
 
   .split-divider:hover,

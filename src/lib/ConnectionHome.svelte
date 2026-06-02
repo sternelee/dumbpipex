@@ -322,6 +322,32 @@
     touch-action: manipulation;
   }
 
+  @media (max-width: 680px) {
+    button {
+      min-height: 3rem; /* already 48px */
+      font-size: 1rem;
+    }
+
+    textarea,
+    input {
+      min-height: 3rem;
+      font-size: 16px; /* iOS: prevent zoom; also Android legibility */
+    }
+
+    .field-hint {
+      font-size: 0.82rem;
+    }
+
+    .status-pill {
+      font-size: 0.95rem;
+      padding: 0.45rem 0.85rem;
+    }
+
+    .meta {
+      font-size: 0.95rem;
+    }
+  }
+
   button.primary {
     background: linear-gradient(135deg, #2563eb, #3b82f6);
     border-color: transparent;

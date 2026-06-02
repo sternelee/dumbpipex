@@ -598,6 +598,46 @@
     border-radius: 0.35rem;
   }
 
+  /* Phone-compact (< 680px) — enforce 44px tap targets */
+  @media (max-width: 680px) {
+    .session-bar.compact {
+      padding: 0.4rem 0.5rem;
+    }
+
+    .session-bar.compact .tab {
+      min-height: 2.75rem; /* 44px iOS HIG */
+      padding: 0.45rem 0.65rem;
+    }
+
+    .session-bar.compact .tab-name {
+      font-size: 0.82rem;
+    }
+
+    .session-bar.compact .tab-close {
+      width: 1.75rem;  /* ~28px visual, but with 0.4rem hit padding below */
+      height: 1.75rem;
+      font-size: 0.95rem;
+      margin-left: 0.3rem;
+    }
+
+    .session-bar.compact .tab-action-btn {
+      width: 2.75rem; /* 44px */
+      height: 2.75rem;
+      border-radius: 0.5rem;
+    }
+
+    .session-bar.compact .more-tab {
+      min-height: 2.75rem;
+      padding: 0.45rem 0.65rem;
+    }
+
+    .session-bar.compact .more-badge {
+      min-width: 1.4rem;
+      height: 1.4rem;
+      font-size: 0.75rem;
+    }
+  }
+
   /* Keyboard open - ultra compact */
   .session-bar.compact.keyboard-open {
     padding: 0.32rem 0.42rem;

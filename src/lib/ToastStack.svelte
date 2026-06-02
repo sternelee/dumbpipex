@@ -170,6 +170,8 @@
     border-radius: 0.4rem;
     cursor: pointer;
     transition: opacity 120ms ease, background-color 120ms ease;
+    min-width: 2rem;  /* 32px */
+    min-height: 2rem;
   }
 
   .toast-close:hover {

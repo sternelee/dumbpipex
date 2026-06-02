@@ -423,6 +423,20 @@
     transition: background-color 120ms ease, color 120ms ease;
   }
 
+  @media (max-width: 680px) {
+    .menu-trigger {
+      min-height: 2.75rem; /* 44px tap target */
+      padding: 0.5rem 0.85rem;
+      font-size: 0.85rem;
+    }
+
+    .menu-bar {
+      height: auto;
+      min-height: 2.75rem;
+      padding: 0.25rem 0.6rem;
+    }
+  }
+
   .menu-trigger:hover,
   .menu-trigger.active {
     background: rgba(59, 130, 246, 0.15);

@@ -264,6 +264,17 @@
     .search-input {
       padding: 0.72rem 2.4rem 0.72rem 2.3rem;
       font-size: 16px; /* prevent iOS zoom */
+      min-height: 2.75rem; /* 44px tap target */
+    }
+
+    .search-clear {
+      width: 2.2rem; /* 35px */
+      height: 2.2rem;
+      right: 0.35rem;
+    }
+
+    .toolbar-button {
+      min-height: 2.75rem; /* 44px */
     }
   }
 </style>

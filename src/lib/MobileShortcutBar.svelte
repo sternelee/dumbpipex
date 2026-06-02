@@ -373,8 +373,8 @@
     font-size: 0.75rem;
     font-weight: 600;
     touch-action: manipulation;
-    padding: 0.35rem 0.5rem;
-    min-height: 1.95rem;
+    padding: 0.55rem 0.6rem;
+    min-height: 2.75rem; /* 44px iOS HIG / 48dp Material */
     white-space: nowrap;
     transition: background-color 120ms ease, border-color 120ms ease;
   }
@@ -388,12 +388,12 @@
     background: rgba(15, 23, 42, 0.7);
     color: #cbd5e1;
     font: inherit;
-    font-size: 0.7rem;
+    font-size: 0.78rem;
     font-weight: 700;
     touch-action: manipulation;
-    padding: 0.35rem 0.5rem;
-    min-height: 1.95rem;
-    min-width: 2.4rem;
+    padding: 0.55rem 0.65rem;
+    min-height: 2.75rem; /* 44px */
+    min-width: 3.2rem;   /* wide enough for ⌃×N */
     text-align: center;
     transition: all 120ms ease;
   }
@@ -410,7 +410,7 @@
   }
 
   .paste-btn { border-color: rgba(59, 130, 246, 0.35); }
-  .toggle-btn { min-width: 1.6rem; padding: 0.35rem 0.3rem; font-size: 0.85rem; }
+  .toggle-btn { min-width: 2.75rem; min-height: 2.75rem; padding: 0.4rem 0.5rem; font-size: 0.95rem; }
 
   .shortcuts-expanded {
     display: grid;
@@ -420,27 +420,38 @@
   .special-char-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
   .char-btn {
-    min-width: 1.75rem;
-    padding: 0.3rem 0.25rem;
-    font-size: 0.72rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.8rem;
   }
 
   .command-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
-  .cmd-btn { font-size: 0.7rem; padding: 0.32rem 0.45rem; }
+  .cmd-btn {
+    font-size: 0.75rem;
+    padding: 0.45rem 0.6rem;
+    min-height: 2.75rem;
+  }
 
   .nav-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.25rem;
+    gap: 0.3rem;
   }
-  .nav-btn { font-size: 0.75rem; padding: 0.32rem 0.45rem; min-width: 2rem; text-align: center; }
+  .nav-btn {
+    font-size: 0.78rem;
+    padding: 0.45rem 0.6rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    text-align: center;
+  }
 
   .repeatable-shortcut {
     border-color: rgba(59, 130, 246, 0.45);
