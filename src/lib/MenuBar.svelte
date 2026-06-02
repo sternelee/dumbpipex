@@ -300,7 +300,7 @@
 
 <svelte:window onclick={handleClickOutside} onkeydown={globalEscape} />
 
-<div class="menu-bar" bind:this={menuBarRef} role="menubar" aria-label="应用菜单">
+<div class="menu-bar" class:compact bind:this={menuBarRef} role="menubar" aria-label="应用菜单">
   <div class="menu-bar-left">
     <span class="menu-dot" style:color={phaseColor(sessionPhase)} aria-hidden="true">
       {phaseDot(sessionPhase)}
@@ -535,6 +535,12 @@
   .menu-item-shortcut {
     color: #64748b;
     font-size: 0.72rem;
+  }
+
+  /* On phones the ⌘-prefixed shortcut hints are noise — there's no
+     physical ⌘ key and the labels are long enough already. */
+  .menu-bar.compact .menu-item-shortcut {
+    display: none;
   }
 
   .menu-separator {
