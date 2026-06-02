@@ -23,7 +23,7 @@
   };
 
   type PersistedRecoveryState = {
-    version: 1;
+    version: 1 | 2;
     ticket: string;
     shell: string;
     autoReconnect: boolean;
