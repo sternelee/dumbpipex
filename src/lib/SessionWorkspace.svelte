@@ -516,7 +516,7 @@
         {/if}
       </div>
     {:else}
-      <div class="empty-terminal" class:hidden={keyboardOpen}>
+      <div class="empty-terminal">
         <h2>暂无远程终端</h2>
         <p>连接 agent 后会自动创建第一个 PTY，后续可继续创建多个会话并在这里切换。</p>
       </div>
@@ -688,9 +688,6 @@
     transition: opacity 200ms ease;
   }
 
-  .empty-terminal.hidden {
-    display: none;
-  }
 
   .empty-terminal h2 {
     margin: 0;
