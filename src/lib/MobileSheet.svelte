@@ -21,6 +21,29 @@
     requestAnimationFrame(() => {
       open = true;
     });
+
+    // If a text input OUTSIDE the sheet is focused, the virtual
+    // keyboard may be appearing. iOS in particular animates the
+    // keyboard in 200–400ms *after* focus, and during that window the
+    // sheet sits on top of where the keyboard is going to be, leaving
+    // the user unable to reach the "完成" close button. Inputs INSIDE
+    // the sheet are fine (search panel needs its own input) and are
+    // not handled here — SessionWorkspace's !keyboardOpen guard
+    // already prevents the sheet from rendering while a textbox has
+    // focus.
+    const handleFocusIn = (event: FocusEvent) => {
+      const target = event.target as Element | null;
+      if (!target) return;
+      const tag = target.tagName;
+      const isText = tag === "INPUT" || tag === "TEXTAREA" || (target as HTMLElement).isContentEditable;
+      if (!isText) return;
+      if (sheetEl && sheetEl.contains(target)) return;
+      requestAnimationFrame(() => onClose());
+    };
+    document.addEventListener("focusin", handleFocusIn);
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn);
+    };
   });
 
   function handleBackdropClick(event: MouseEvent) {
