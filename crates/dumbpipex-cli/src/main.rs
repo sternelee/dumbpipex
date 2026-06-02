@@ -958,6 +958,7 @@ async fn main() -> Result<()> {
 
     let (manager, event_rx) = SessionManager::new(shell);
     manager.spawn_background_tasks(event_rx);
+    install_shutdown_hook(manager.clone());
     serve_endpoint(endpoint, manager, args.name).await
 }
 
@@ -1274,6 +1275,85 @@ fn wait_for_ticket(path: &Path, child: &mut std::process::Child) -> Result<Conne
         }
 
         thread::sleep(Duration::from_millis(100));
+    }
+}
+
+/// Install a signal handler that explicitly tears down every PTY before
+/// the runtime drops the `SessionManager`. This is the difference
+/// between the agent process and the shell child processes sharing a
+/// death: SIGINT/Ctrl-C used to leave the shell running orphaned.
+fn install_shutdown_hook(manager: SessionManager) {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        let mgr = manager.clone();
+        tokio::spawn(async move {
+            let mut term = signal(SignalKind::terminate())
+                .expect("failed to install SIGTERM handler");
+            let mut intr = signal(SignalKind::interrupt())
+                .expect("failed to install SIGINT handler");
+            tokio::select! {
+                _ = term.recv() => info!("received SIGTERM, tearing down PTYs"),
+                _ = intr.recv() => info!("received SIGINT, tearing down PTYs"),
+            }
+            mgr.shutdown_all().await;
+            std::process::exit(0);
+        });
+    }
+    #[cfg(not(unix))]
+    {
+        let mgr = manager.clone();
+        tokio::spawn(async move {
+            if let Ok(()) = tokio::signal::ctrl_c().await {
+                info!("received Ctrl-C, tearing down PTYs");
+                mgr.shutdown_all().await;
+                std::process::exit(0);
+            }
+        });
+        let _ = manager; // silence unused warning
+    }
+}
+
+impl Drop for SessionManagerInner {
+    fn drop(&mut self) {
+        // Best-effort: on normal agent exit (e.g. `serve_endpoint`
+        // returning), synchronously kill every child shell so we never
+        // leak orphaned processes. Uses `try_lock` to avoid blocking
+        // forever inside Drop — if the lock is held we just leak the
+        // shell, which is no worse than the pre-fix behavior.
+        let mut guard = match self.sessions.try_lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        let sessions: Vec<_> = guard.drain().map(|(_, s)| s).collect();
+        drop(guard);
+        for session in sessions {
+            if let Ok(mut proc_guard) = session.process.lock() {
+                if let Some(proc) = proc_guard.take() {
+                    proc.shutting_down.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if let Ok(mut child) = proc.child.lock() {
+                        let _ = child.kill();
+                    }
+                    // Don't try to join threads here — we are inside
+                    // Drop and they may hold references into us.
+                    drop(proc);
+                }
+            }
+        }
+    }
+}
+
+impl SessionManager {
+    /// Kill every PTY and clear the session map. Used both by the
+    /// signal handler and by `serve_endpoint`'s normal return.
+    async fn shutdown_all(&self) {
+        let sessions: Vec<_> = {
+            let mut guard = self.inner.sessions.lock().await;
+            guard.drain().map(|(_, s)| s).collect()
+        };
+        for session in sessions {
+            session.shutdown().await;
+        }
     }
 }
 
