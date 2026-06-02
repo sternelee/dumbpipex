@@ -6,6 +6,7 @@
   import ConnectionHome from "$lib/ConnectionHome.svelte";
   import type { RemotePtyApi } from "$lib/remote-pty-types";
   import SessionWorkspace from "$lib/SessionWorkspace.svelte";
+  import ToastStack, { toast } from "$lib/ToastStack.svelte";
   import type {
     ConnectTicketResponse,
     PtySession,
@@ -334,6 +335,7 @@
 
   function handlePaneNotice(message: string) {
     status = message;
+    toast(message, "info", 2200);
   }
 
   async function connect(isAutoReconnect = false) {
@@ -359,8 +361,11 @@
       if (!resumed) {
         void createRemotePty();
       }
+      toast(`已连接 ${result.agent_name}`, "success", 2400);
     } catch (error) {
-      status = String(error);
+      const message = String(error);
+      status = message;
+      toast(message, "error", 6000);
       sessionPhase = "idle";
       if (isAutoReconnect || autoReconnectEnabled) {
         autoReconnectEnabled = true;
@@ -392,7 +397,9 @@
       resetPtyState();
       writeRecoveryState();
     } catch (error) {
-      status = String(error);
+      const message = String(error);
+      status = message;
+      toast(message, "error", 5000);
       sessionPhase = connected ? "ready" : "idle";
       manualDisconnectPending = false;
       autoReconnectEnabled = true;
@@ -536,6 +543,7 @@
         status = payload.resumed
           ? `已恢复 ${payload.pty_id} (${payload.shell})`
           : `已创建 ${payload.pty_id} (${payload.shell})`;
+        toast(status, "success", 2400);
         sessionPhase = "ready";
         await tick();
         ptyApis.get(payload.pty_id)?.writeText(
@@ -577,6 +585,7 @@
         }
 
         status = `${payload.pty_id} 已退出`;
+        toast(status, "info", 2400);
         sessionPhase = connected ? "ready" : "idle";
         writeRecoveryState();
         break;
@@ -606,12 +615,14 @@
           await selectPty(fallback);
         }
         status = `${payload.pty_id} 被其他客户端接管`;
+        toast(status, "warning", 5000);
         sessionPhase = connected ? "ready" : "idle";
         writeRecoveryState();
         break;
       }
       case "error":
         status = payload.message;
+        toast(payload.message, "error", 6000);
         if (connected) sessionPhase = "ready";
         break;
     }
@@ -716,6 +727,7 @@
 </svelte:head>
 
 <main class="app-shell">
+  <ToastStack />
   {#if connected}
     <SessionWorkspace
       agentName={agentName}
