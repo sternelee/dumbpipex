@@ -13,6 +13,7 @@ export type RemoteEvent =
 	  }
 	| { type: "pty_output"; pty_id: string; data: string }
 	| { type: "pty_exited"; pty_id: string; exit_code?: number | null }
+	| { type: "pty_detached"; pty_id: string; reason: string }
 	| { type: "error"; message: string };
 
 export type PtyRecoveryInfo = {

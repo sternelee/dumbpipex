@@ -122,6 +122,16 @@ struct PtyCreatedDispatch {
     resumed: bool,
 }
 
+enum ResumeOutcome {
+    Attached {
+        dispatch: PtyCreatedDispatch,
+        backlog: Vec<String>,
+    },
+    Rejected {
+        reason: String,
+    },
+}
+
 struct ResolvedSecret {
     key: SecretKey,
     encoded: String,
@@ -339,12 +349,37 @@ impl ManagedSession {
         sender: mpsc::Sender<ServerMessage>,
         cols: u16,
         rows: u16,
-    ) -> Result<(PtyCreatedDispatch, Vec<String>)> {
+    ) -> Result<ResumeOutcome> {
         self.resize(cols, rows).await?;
 
         let mut state = self.state.lock().await;
         if state.exited {
             return Err(anyhow!("PTY {} has already exited", self.pty_id));
+        }
+
+        if let Some(existing) = state.attached.as_ref() {
+            if existing.client_id != client_id {
+                // Another client already owns this PTY. Refuse the attach
+                // and tell the existing owner it has been displaced so it
+                // can stop waiting for output.
+                let displaced_sender = existing.sender.clone();
+                let displaced_client_id = existing.client_id.clone();
+                drop(state);
+                let _ = send_message(
+                    &displaced_sender,
+                    ServerMessage::PtyDetached {
+                        pty_id: self.pty_id.clone(),
+                        reason: format!(
+                            "PTY attached by another client ({displaced_client_id}); \
+                             refusing to share a single PTY"
+                        ),
+                    },
+                )
+                .await;
+                return Ok(ResumeOutcome::Rejected {
+                    reason: format!("PTY {} is already attached to another client", self.pty_id),
+                });
+            }
         }
 
         state.cols = cols;
@@ -355,8 +390,8 @@ impl ManagedSession {
         });
         state.detached_at = None;
 
-        Ok((
-            PtyCreatedDispatch {
+        Ok(ResumeOutcome::Attached {
+            dispatch: PtyCreatedDispatch {
                 pty_id: self.pty_id.clone(),
                 shell: self.shell.clone(),
                 cols,
@@ -364,8 +399,8 @@ impl ManagedSession {
                 resume_token: self.resume_token.clone(),
                 resumed: true,
             },
-            state.backlog.iter().cloned().collect(),
-        ))
+            backlog: state.backlog.iter().cloned().collect(),
+        })
     }
 
     async fn detach_if_client(&self, client_id: &str) {
@@ -572,7 +607,19 @@ impl SessionManager {
             return Err(anyhow!("resume token mismatch for PTY {}", session.pty_id));
         }
 
-        let (created, backlog) = session.resume(client_id.clone(), sender.clone(), cols, rows).await?;
+        let outcome = session
+            .resume(client_id.clone(), sender.clone(), cols, rows)
+            .await?;
+
+        let (created, backlog) = match outcome {
+            ResumeOutcome::Attached { dispatch, backlog } => (dispatch, backlog),
+            ResumeOutcome::Rejected { reason } => {
+                // Tell the requesting client we refused, and that client
+                // remains detached.
+                let _ = send_message(&sender, ServerMessage::Error { message: reason }).await;
+                return Ok(());
+            }
+        };
 
         if let Err(err) = send_message(
             &sender,

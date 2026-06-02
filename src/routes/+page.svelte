@@ -539,6 +539,35 @@
         writeRecoveryState();
         break;
       }
+      case "pty_detached": {
+        // Another client took over this PTY. We do NOT get a PtyExited, so
+        // mark the local tab as detached and surface a clear status so the
+        // user knows their input is being ignored. Reusing the `exited`
+        // flag is the simplest way to disable input on this tab without
+        // introducing a new session field.
+        const api = ptyApis.get(payload.pty_id);
+        api?.writeText(
+          `\r\n[pty detached] ${payload.reason}\r\n[pty detached] input disabled for ${payload.pty_id}\r\n`,
+        );
+        const existing = getPty(payload.pty_id);
+        if (existing && !existing.exited) {
+          upsertPty({ ...existing, exited: true });
+        }
+        ptyResumeTokens.delete(payload.pty_id);
+        ptyModes.delete(payload.pty_id);
+        ptyInputBuffers.delete(payload.pty_id);
+        if (activePtyId === payload.pty_id) {
+          const fallback =
+            ptys.find((item) => item.pty_id !== payload.pty_id && !item.exited)?.pty_id ??
+            ptys.find((item) => item.pty_id !== payload.pty_id)?.pty_id ??
+            payload.pty_id;
+          await selectPty(fallback);
+        }
+        status = `${payload.pty_id} 被其他客户端接管`;
+        sessionPhase = connected ? "ready" : "idle";
+        writeRecoveryState();
+        break;
+      }
       case "error":
         status = payload.message;
         if (connected) sessionPhase = "ready";

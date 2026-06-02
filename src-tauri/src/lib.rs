@@ -46,6 +46,7 @@ enum RemoteEvent {
     },
     PtyOutput { pty_id: String, data: String },
     PtyExited { pty_id: String, exit_code: Option<i32> },
+    PtyDetached { pty_id: String, reason: String },
     Error { message: String },
 }
 
@@ -298,6 +299,9 @@ fn emit_server_message(app: &AppHandle, message: ServerMessage) -> Result<()> {
         ServerMessage::PtyOutput { pty_id, data } => RemoteEvent::PtyOutput { pty_id, data },
         ServerMessage::PtyExited { pty_id, exit_code } => {
             RemoteEvent::PtyExited { pty_id, exit_code }
+        }
+        ServerMessage::PtyDetached { pty_id, reason } => {
+            RemoteEvent::PtyDetached { pty_id, reason }
         }
         ServerMessage::Error { message } => RemoteEvent::Error { message },
         ServerMessage::Pong => return Ok(()),

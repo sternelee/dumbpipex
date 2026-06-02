@@ -93,6 +93,10 @@ pub enum ServerMessage {
     },
     PtyOutput { pty_id: String, data: String },
     PtyExited { pty_id: String, exit_code: Option<i32> },
+    /// Sent to a client that was attached to a PTY but lost the slot to
+    /// another attaching client. The client should treat the PTY as detached
+    /// and stop expecting live output for it.
+    PtyDetached { pty_id: String, reason: String },
     Error { message: String },
     Pong,
 }
