@@ -195,4 +195,15 @@
       animation: none;
     }
   }
+
+  @media (max-width: 680px) {
+    /* Close button bump from 32px to 44px on phones; the toast itself
+       is centered and the close × is in the corner of the thumb zone,
+       where a 32px target is hard to land reliably. */
+    .toast-close {
+      min-width: 2.75rem; /* 44px */
+      min-height: 2.75rem;
+      font-size: 1.1rem;
+    }
+  }
 </style>
