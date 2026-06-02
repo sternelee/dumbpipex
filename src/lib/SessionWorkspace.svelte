@@ -109,6 +109,7 @@
   /* ── keyboard detection ── */
   let baseWindowHeight = $state(0);
   let baseViewportHeight = $state(0);
+  let focusInputCount = $state(0);
 
   function currentViewportHeight() {
     return window.visualViewport?.height ?? window.innerHeight;
@@ -122,11 +123,15 @@
 
     // 基线取两者较大值（初始化时键盘大概率未弹出）
     const baseline = Math.max(baseWindowHeight, baseViewportHeight);
-    if (baseline === 0) return;
-
-    const diff = baseline - Math.min(winH, vvH);
+    const diff = baseline === 0 ? 0 : baseline - Math.min(winH, vvH);
     const threshold = Math.max(100, baseline * 0.12);
-    const next = compactLayout && diff > threshold;
+
+    // Two signals: viewport-shrink (best on portrait) OR a text input
+    // currently focused (best on landscape, where WebViews sometimes
+    // don't resize at all). Whichever fires wins.
+    const viewportSays = baseline > 0 && diff > threshold;
+    const focusSays = focusInputCount > 0;
+    const next = viewportSays || focusSays;
 
     if (next !== keyboardOpen) {
       keyboardOpen = next;
@@ -135,6 +140,32 @@
         mobilePanel = null;
         applyMobilePanelState(null);
       }
+    }
+  }
+
+  function isTextInput(node: Element | null): boolean {
+    if (!node) return false;
+    const tag = node.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if ((node as HTMLElement).isContentEditable) return true;
+    return false;
+  }
+
+  function handleFocusIn(event: FocusEvent) {
+    if (isTextInput(event.target as Element)) {
+      focusInputCount += 1;
+      // Re-evaluate immediately so the layout responds before the
+      // viewport resize event lands (WebView animations are slow).
+      detectKeyboard();
+    }
+  }
+
+  function handleFocusOut(event: FocusEvent) {
+    if (isTextInput(event.target as Element)) {
+      focusInputCount = Math.max(0, focusInputCount - 1);
+      // Defer one frame — focusout fires before the next focusin if the
+      // user tabs between inputs, and we don't want a flicker.
+      requestAnimationFrame(detectKeyboard);
     }
   }
 
@@ -333,6 +364,11 @@
 
     window.addEventListener("resize", handleResize);
     window.visualViewport?.addEventListener("resize", detectKeyboard);
+    // focusin/focusout capture fires even on iOS WebView landscape
+    // (where visualViewport sometimes doesn't shrink at all when the
+    // soft keyboard appears).
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
 
     // ResizeObserver 监控 terminal-card 实际可用高度
     let ro: ResizeObserver | null = null;
@@ -345,6 +381,8 @@
       clearTimeout(baselineTimer);
       window.removeEventListener("resize", handleResize);
       window.visualViewport?.removeEventListener("resize", detectKeyboard);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
       ro?.disconnect();
     };
   });
