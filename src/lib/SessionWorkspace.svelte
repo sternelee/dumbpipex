@@ -562,10 +562,13 @@
     min-width: 0;
     display: grid;
     gap: 1rem;
-    padding-top: max(1.5rem, calc(1rem + env(safe-area-inset-top)));
-    padding-right: calc(1rem + env(safe-area-inset-right));
-    padding-bottom: max(1rem, calc(0.5rem + env(safe-area-inset-bottom)));
-    padding-left: calc(1rem + env(safe-area-inset-left));
+    /* safe-area-inset-* with a 1.2rem fallback for devices that don't
+       report one. The fallback doubles as the minimum visual padding
+       so the content never sits flush against the screen edge. */
+    padding-top: max(1.2rem, env(safe-area-inset-top, 1.2rem));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0px));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 1rem));
+    padding-left: calc(1rem + env(safe-area-inset-left, 0px));
     box-sizing: border-box;
     grid-template-rows: auto 1fr;
     overflow: hidden;
@@ -712,8 +715,10 @@
 
   .workspace-shell.keyboard-open {
     gap: 0.4rem;
-    padding-top: max(1.2rem, calc(0.4rem + env(safe-area-inset-top)));
-    padding-bottom: max(0.3rem, calc(0.2rem + env(safe-area-inset-bottom)));
+    /* When keyboard is up the top safe-area shrinks to 0 in most
+       WebViews; preserve a small breathing room above the menu bar. */
+    padding-top: max(0.4rem, env(safe-area-inset-top, 0.4rem));
+    padding-bottom: max(0.2rem, env(safe-area-inset-bottom, 0.2rem));
   }
 
   .workspace-shell.keyboard-open .terminal-card {
@@ -728,10 +733,10 @@
   @media (max-width: 899px) {
     .workspace-shell {
       gap: 0.6rem;
-      padding-top: max(1.2rem, calc(0.6rem + env(safe-area-inset-top)));
-      padding-right: calc(0.6rem + env(safe-area-inset-right));
-      padding-bottom: max(0.6rem, calc(0.3rem + env(safe-area-inset-bottom)));
-      padding-left: calc(0.6rem + env(safe-area-inset-left));
+      padding-top: max(0.6rem, env(safe-area-inset-top, 0.6rem));
+      padding-right: calc(0.6rem + env(safe-area-inset-right, 0px));
+      padding-bottom: max(0.3rem, env(safe-area-inset-bottom, 0.3rem));
+      padding-left: calc(0.6rem + env(safe-area-inset-left, 0px));
     }
 
     .terminal-card {
@@ -742,8 +747,8 @@
 
     .workspace-shell.keyboard-open {
       gap: 0.35rem;
-      padding-top: max(1.2rem, calc(0.35rem + env(safe-area-inset-top)));
-      padding-bottom: max(0.25rem, calc(0.15rem + env(safe-area-inset-bottom)));
+      padding-top: max(0.35rem, env(safe-area-inset-top, 0.35rem));
+      padding-bottom: max(0.15rem, env(safe-area-inset-bottom, 0.15rem));
     }
 
     .workspace-shell.keyboard-open .terminal-card {
