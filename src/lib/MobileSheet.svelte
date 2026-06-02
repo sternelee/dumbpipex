@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
 
   let {
     title,
@@ -16,8 +16,7 @@
   let sheetEl = $state<HTMLDivElement | null>(null);
   let open = $state(false);
 
-  onMount(async () => {
-    await tick();
+  onMount(() => {
     requestAnimationFrame(() => {
       open = true;
     });
