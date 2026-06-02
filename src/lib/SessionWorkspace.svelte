@@ -77,6 +77,34 @@
   /* ── split pane ── */
   let splitPtyId = $state<string | null>(null);
   let pendingSplitDir = $state<"right" | "left" | null>(null);
+  let splitRatio = $state(0.5);
+  const SPLIT_RATIO_KEY = "dumbpipex:split-ratio";
+  const SPLIT_RATIO_MIN = 0.2;
+  const SPLIT_RATIO_MAX = 0.8;
+  let isDraggingSplit = $state(false);
+  let splitContainerEl = $state<HTMLElement | null>(null);
+
+  function clampSplitRatio(value: number) {
+    if (Number.isNaN(value)) return 0.5;
+    return Math.min(SPLIT_RATIO_MAX, Math.max(SPLIT_RATIO_MIN, value));
+  }
+
+  function loadSplitRatio() {
+    if (typeof localStorage === "undefined") return;
+    const raw = localStorage.getItem(SPLIT_RATIO_KEY);
+    if (!raw) return;
+    const parsed = Number.parseFloat(raw);
+    if (Number.isFinite(parsed)) splitRatio = clampSplitRatio(parsed);
+  }
+
+  function persistSplitRatio(value: number) {
+    if (typeof localStorage === "undefined") return;
+    try {
+      localStorage.setItem(SPLIT_RATIO_KEY, value.toString());
+    } catch {
+      // ignore quota / private-mode errors
+    }
+  }
 
   /* ── keyboard detection ── */
   let baseWindowHeight = $state(0);
@@ -186,6 +214,50 @@
   function closeSplit() {
     splitPtyId = null;
     pendingSplitDir = null;
+    isDraggingSplit = false;
+  }
+
+  function handleSplitDividerPointerDown(event: PointerEvent) {
+    if (!splitPtyId) return;
+    event.preventDefault();
+    isDraggingSplit = true;
+    const target = event.currentTarget as HTMLElement;
+    target.setPointerCapture?.(event.pointerId);
+  }
+
+  function handleSplitDividerPointerMove(event: PointerEvent) {
+    if (!isDraggingSplit || !splitContainerEl) return;
+    const rect = splitContainerEl.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const offset = event.clientX - rect.left;
+    const next = clampSplitRatio(offset / rect.width);
+    if (Math.abs(next - splitRatio) > 0.001) splitRatio = next;
+  }
+
+  function endSplitDrag(event: PointerEvent) {
+    if (!isDraggingSplit) return;
+    isDraggingSplit = false;
+    const target = event.currentTarget as HTMLElement;
+    target.releasePointerCapture?.(event.pointerId);
+    persistSplitRatio(splitRatio);
+  }
+
+  function handleSplitDividerKeyDown(event: KeyboardEvent) {
+    if (!splitPtyId) return;
+    const step = event.shiftKey ? 0.1 : 0.02;
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      splitRatio = clampSplitRatio(splitRatio - step);
+      persistSplitRatio(splitRatio);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      splitRatio = clampSplitRatio(splitRatio + step);
+      persistSplitRatio(splitRatio);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      splitRatio = 0.5;
+      persistSplitRatio(splitRatio);
+    }
   }
 
   // Watch for a new PTY to arrive after split request
@@ -243,6 +315,7 @@
 
   onMount(() => {
     mobilePlatform = detectMobilePlatform();
+    loadSplitRatio();
     syncLayoutState();
 
     // 初始化基线（延迟确保布局稳定）
@@ -319,21 +392,86 @@
 
 
     {#if ptys.length > 0}
-      <div class="terminal-stack" class:split={!!splitPtyId}>
-        {#each ptys as pty (pty.pty_id)}
-          {#if splitPtyId && pty.pty_id === activePtyId}
-            <div class="split-divider"></div>
+      <div
+        class="terminal-stack"
+        class:split={!!splitPtyId}
+        class:dragging={isDraggingSplit}
+        bind:this={splitContainerEl}
+      >
+        {#if !splitPtyId}
+          {#each ptys as pty (pty.pty_id)}
+            <RemotePtyPane
+              active={pty.pty_id === activePtyId}
+              {fontSize}
+              theme={currentTheme()}
+              ondata={onPaneData}
+              onnotice={onPaneNotice}
+              onregisterApi={(api) => onRegisterPtyApi(pty.pty_id, api)}
+              onresize={(size) => onResizePty(pty.pty_id, size)}
+            />
+          {/each}
+        {:else}
+          {@const splitPty = ptys.find((p) => p.pty_id === splitPtyId)}
+          {@const activePty = ptys.find((p) => p.pty_id === activePtyId)}
+          {@const splitLeft = pendingSplitDir === "left"}
+          {#if activePty}
+            {#if splitLeft && splitPty}
+              <RemotePtyPane
+                active
+                flexBasisPct={splitRatio * 100}
+                {fontSize}
+                theme={currentTheme()}
+                ondata={onPaneData}
+                onnotice={onPaneNotice}
+                onregisterApi={(api) => onRegisterPtyApi(splitPty.pty_id, api)}
+                onresize={(size) => onResizePty(splitPty.pty_id, size)}
+              />
+            {/if}
+            <RemotePtyPane
+              active
+              flexBasisPct={splitLeft ? (1 - splitRatio) * 100 : splitRatio * 100}
+              {fontSize}
+              theme={currentTheme()}
+              ondata={onPaneData}
+              onnotice={onPaneNotice}
+              onregisterApi={(api) => onRegisterPtyApi(activePty.pty_id, api)}
+              onresize={(size) => onResizePty(activePty.pty_id, size)}
+            />
+            <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+            <div
+              class="split-divider"
+              role="separator"
+              tabindex="0"
+              aria-orientation="vertical"
+              aria-valuenow={Math.round(splitRatio * 100)}
+              aria-valuemin={Math.round(SPLIT_RATIO_MIN * 100)}
+              aria-valuemax={Math.round(SPLIT_RATIO_MAX * 100)}
+              aria-label="调整分屏宽度"
+              title="拖动调整分屏宽度（← → 精细调节）"
+              onpointerdown={handleSplitDividerPointerDown}
+              onpointermove={handleSplitDividerPointerMove}
+              onpointerup={endSplitDrag}
+              onpointercancel={endSplitDrag}
+              onlostpointercapture={endSplitDrag}
+              onkeydown={handleSplitDividerKeyDown}
+            >
+              <span class="split-grip" aria-hidden="true"></span>
+            </div>
+            {#if !splitLeft && splitPty}
+              <RemotePtyPane
+                active
+                flexBasisPct={(1 - splitRatio) * 100}
+                {fontSize}
+                theme={currentTheme()}
+                ondata={onPaneData}
+                onnotice={onPaneNotice}
+                onregisterApi={(api) => onRegisterPtyApi(splitPty.pty_id, api)}
+                onresize={(size) => onResizePty(splitPty.pty_id, size)}
+              />
+            {/if}
           {/if}
-          <RemotePtyPane
-            active={pty.pty_id === activePtyId || pty.pty_id === splitPtyId}
-            {fontSize}
-            theme={currentTheme()}
-            ondata={onPaneData}
-            onnotice={onPaneNotice}
-            onregisterApi={(api) => onRegisterPtyApi(pty.pty_id, api)}
-            onresize={(size) => onResizePty(pty.pty_id, size)}
-          />
-        {/each}
+        {/if}
       </div>
     {:else}
       <div class="empty-terminal" class:hidden={keyboardOpen}>
@@ -423,18 +561,62 @@
   }
 
   .terminal-stack.split > :global(.pane.active) {
-    flex: 1 1 0;
+    flex-grow: 1;
+    flex-shrink: 1;
     min-width: 0;
   }
 
-  .split-divider {
-    width: 4px;
-    flex-shrink: 0;
-    background: rgba(148, 163, 184, 0.15);
+  .terminal-stack.split.dragging > :global(.pane.active) {
+    transition: none;
   }
 
-  .split-divider:hover {
-    background: rgba(59, 130, 246, 0.3);
+  .split-divider {
+    width: 6px;
+    flex-shrink: 0;
+    flex-grow: 0;
+    background: rgba(148, 163, 184, 0.18);
+    cursor: col-resize;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    user-select: none;
+    transition: background-color 140ms ease;
+  }
+
+  .split-divider:hover,
+  .split-divider:focus-visible {
+    background: rgba(59, 130, 246, 0.4);
+    outline: none;
+  }
+
+  .split-divider:focus-visible::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border: 2px solid rgba(59, 130, 246, 0.6);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+
+  .terminal-stack.dragging .split-divider {
+    background: rgba(59, 130, 246, 0.55);
+  }
+
+  .split-grip {
+    width: 2px;
+    height: 1.6rem;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.55);
+    transition: background-color 140ms ease, height 140ms ease;
+  }
+
+  .split-divider:hover .split-grip,
+  .split-divider:focus-visible .split-grip,
+  .terminal-stack.dragging .split-grip {
+    background: rgba(219, 234, 254, 0.85);
+    height: 2.4rem;
   }
 
   .empty-terminal {

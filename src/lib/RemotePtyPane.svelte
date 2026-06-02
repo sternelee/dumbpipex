@@ -11,6 +11,7 @@
     active = false,
     fontSize = 15,
     theme,
+    flexBasisPct,
     ondata,
     onnotice,
     onregisterApi,
@@ -19,6 +20,7 @@
     active?: boolean;
     fontSize?: number;
     theme: RemotePtyTheme;
+    flexBasisPct?: number;
     ondata?: (data: string) => void;
     onnotice?: (message: string) => void;
     onregisterApi?: (api: RemotePtyApi | null) => void;
@@ -253,6 +255,7 @@
   class="pane"
   class:focused={focused}
   style:display={active ? "flex" : "none"}
+  style:flex-basis={flexBasisPct != null ? `${flexBasisPct}%` : null}
   onpointerdown={(e) => {
     startLongPress(e);
     if (!focused) {
