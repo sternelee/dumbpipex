@@ -35,6 +35,19 @@
         return "Idle";
     }
   }
+
+  /* The wire format is URL-safe base64 with no padding. */
+  const TICKET_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+  const trimmedTicket = $derived(ticket.trim());
+  const ticketLooksValid = $derived(
+    trimmedTicket.length > 16 && TICKET_PATTERN.test(trimmedTicket),
+  );
+  const connectDisabled = $derived(busy || !ticketLooksValid);
+  const showTicketHint = $derived(trimmedTicket.length > 0 && !ticketLooksValid);
+  const isConnecting = $derived(
+    sessionPhase === "connecting" || sessionPhase === "creating_pty",
+  );
 </script>
 
 <section class="home-shell">
@@ -44,7 +57,14 @@
       <h1>P2P remote terminal</h1>
       <p>先连接远程 agent，再进入专门的会话工作区操作终端。</p>
     </div>
-    <div class="status-pill">{phaseLabel(sessionPhase)}</div>
+    <div class="status-pill" data-phase={sessionPhase}>
+      {#if isConnecting}
+        <span class="status-spinner" aria-hidden="true"></span>
+      {:else}
+        <span class="status-dot" aria-hidden="true"></span>
+      {/if}
+      {phaseLabel(sessionPhase)}
+    </div>
   </div>
 
   <div class="home-grid">
@@ -64,9 +84,18 @@
           autocomplete="off"
           spellcheck={false}
           enterkeyhint="done"
+          aria-invalid={showTicketHint}
+          aria-describedby="ticket-hint"
           oninput={(event) => onTicketChange((event.currentTarget as HTMLTextAreaElement).value)}
           disabled={busy}
         ></textarea>
+        <small id="ticket-hint" class="field-hint" class:error={showTicketHint}>
+          {#if showTicketHint}
+            Ticket 格式无效，应为 URL-safe base64 编码（仅 A-Z、a-z、0-9、_、-）
+          {:else}
+            通常为 100+ 字符的 base64 字符串
+          {/if}
+        </small>
       </label>
 
       <label class="field">
@@ -79,16 +108,27 @@
           spellcheck={false}
           enterkeyhint="done"
           oninput={(event) => onShellChange((event.currentTarget as HTMLInputElement).value)}
-          onkeydown={(event) => event.key === "Enter" && !busy && ticket.trim() && onConnect()}
+          onkeydown={(event) =>
+            event.key === "Enter" && !busy && ticketLooksValid && onConnect()}
           disabled={busy}
         />
       </label>
 
-      <button class="primary" onclick={onConnect} disabled={busy || !ticket.trim()}>
-        {sessionPhase === "connecting" ? "Connecting..." : "Connect"}
+      <button
+        class="primary"
+        onclick={onConnect}
+        disabled={connectDisabled}
+        aria-busy={isConnecting}
+      >
+        {#if isConnecting}
+          <span class="status-spinner" aria-hidden="true"></span>
+          正在连接...
+        {:else}
+          Connect
+        {/if}
       </button>
 
-      <div class="meta">
+      <div class="meta" aria-live="polite">
         <span><strong>Status:</strong> {status}</span>
       </div>
     </section>
@@ -181,11 +221,55 @@
   }
 
   .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     padding: 0.35rem 0.7rem;
     border-radius: 999px;
     background: rgba(148, 163, 184, 0.16);
     font-size: 0.875rem;
     white-space: nowrap;
+  }
+
+  .status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: #94a3b8;
+  }
+
+  .status-pill[data-phase="ready"] .status-dot {
+    background: #34d399;
+    box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
+  }
+
+  .status-pill[data-phase="connecting"] .status-dot,
+  .status-pill[data-phase="creating_pty"] .status-dot,
+  .status-pill[data-phase="disconnecting"] .status-dot {
+    background: #facc15;
+  }
+
+  .status-spinner {
+    display: inline-block;
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    border-top-color: #60a5fa;
+    animation: status-spin 720ms linear infinite;
+  }
+
+  @keyframes status-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-spinner {
+      animation-duration: 1800ms;
+    }
   }
 
   .home-grid {
@@ -241,10 +325,28 @@
   button.primary {
     background: linear-gradient(135deg, #2563eb, #3b82f6);
     border-color: transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
   }
 
   button:disabled {
     opacity: 0.5;
+  }
+
+  .field-hint {
+    color: #64748b;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .field-hint.error {
+    color: #fca5a5;
+  }
+
+  textarea[aria-invalid="true"] {
+    border-color: rgba(239, 68, 68, 0.5);
   }
 
   .meta {
