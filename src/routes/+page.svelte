@@ -448,7 +448,15 @@
         });
         resumed += 1;
       } catch (error) {
-        status = String(error);
+        // The PTY can no longer be resumed (token mismatch after
+        // agent restart, gone from sweeper, or rejected because
+        // another client is attached). Drop every trace of it from
+        // the local recovery state and in-memory caches so we do not
+        // try to resume it again on the next reconnect.
+        ptyResumeTokens.delete(session.pty_id);
+        ptyModes.delete(session.pty_id);
+        ptyInputBuffers.delete(session.pty_id);
+        status = `${session.pty_id} 恢复失败: ${String(error)}`;
       }
     }
 
