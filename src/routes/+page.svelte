@@ -651,15 +651,22 @@
       for (const pty of persisted.ptys) {
         ptyModes.set(pty.pty_id, pty.mode);
       }
-      if (persisted.autoReconnect && persisted.ticket.trim()) {
-        void connect(true);
-      }
     }
 
     let unlisten: (() => void) | undefined;
+    // Order matters: subscribe to remote-event BEFORE issuing the
+    // auto-reconnect. Otherwise early "Hello" / "PtyList" / "PtyCreated"
+    // frames arrive between connect() and listen() resolving and are
+    // silently dropped, which manifests as "connected but PTYs missing
+    // after restart". The listen() promise resolves synchronously in
+    // tests but is a real Tauri IPC round-trip on device, hence the
+    // observable race.
     void listen<RemoteEvent>("remote-event", (event) => void handleRemoteEvent(event.payload)).then(
       (dispose) => {
         unlisten = dispose;
+        if (persisted?.autoReconnect && persisted.ticket.trim()) {
+          void connect(true);
+        }
       },
     );
 
