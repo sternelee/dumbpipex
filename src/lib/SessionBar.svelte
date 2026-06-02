@@ -126,8 +126,34 @@
               {/if}
             </span>
             {#if pty.exited}
-              <span class="tab-exit">●</span>
+              <span class="tab-exit" aria-label="已退出">●</span>
             {/if}
+            <span
+              class="tab-close"
+              role="button"
+              tabindex="0"
+              aria-label={`关闭 ${pty.pty_id}`}
+              title={`关闭 ${pty.pty_id}`}
+              onpointerdown={(e) => e.stopPropagation()}
+              onclick={(e) => {
+                e.stopPropagation();
+                if (busy) return;
+                if (pty.pty_id === activePtyId) {
+                  onCloseActivePty();
+                } else {
+                  onSelectPty(pty.pty_id);
+                  onCloseActivePty();
+                }
+              }}
+              onkeydown={(e) => {
+                if (e.key !== "Enter" && e.key !== " ") return;
+                e.preventDefault();
+                e.stopPropagation();
+                if (busy) return;
+                if (pty.pty_id !== activePtyId) onSelectPty(pty.pty_id);
+                onCloseActivePty();
+              }}
+            >×</span>
           </button>
         {/each}
 
@@ -303,6 +329,41 @@
     font-size: 0.6rem;
     color: #ef4444;
     margin-left: 0.15rem;
+  }
+
+  .tab-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    margin-left: 0.2rem;
+    border-radius: 0.4rem;
+    color: rgba(148, 163, 184, 0.6);
+    font-size: 0.95rem;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+    flex-shrink: 0;
+  }
+
+  .tab:hover .tab-close,
+  .tab:focus-within .tab-close {
+    opacity: 1;
+  }
+
+  .tab-close:hover,
+  .tab-close:focus-visible {
+    color: #fecaca;
+    background: rgba(239, 68, 68, 0.18);
+    outline: none;
+  }
+
+  .session-bar.compact .tab-close {
+    opacity: 1;
+    width: 1.15rem;
+    height: 1.15rem;
+    font-size: 0.85rem;
   }
 
   /* ===== More Tab ===== */
