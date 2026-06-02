@@ -16,7 +16,41 @@
   let sheetEl = $state<HTMLDivElement | null>(null);
   let open = $state(false);
 
+  // Focus trap: keep Tab cycling within the sheet so a phone
+  // keyboard user can never tab into the obscured terminal behind
+  // the sheet. Restore focus to the element that opened us on close
+  // so the user lands back where they were.
+  function getFocusable(node: HTMLElement): HTMLElement[] {
+    const sel =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    return Array.from(node.querySelectorAll<HTMLElement>(sel));
+  }
+
+  function handleSheetKeydown(event: KeyboardEvent) {
+    if (event.key !== "Tab") return;
+    if (!sheetEl) return;
+    const focusable = getFocusable(sheetEl);
+    if (focusable.length === 0) {
+      // No focusable inside; pin focus to the sheet itself so the
+      // WebView doesn't escape to a hidden terminal.
+      event.preventDefault();
+      sheetEl.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+    if (event.shiftKey && (active === first || !sheetEl.contains(active))) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   onMount(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
     requestAnimationFrame(() => {
       open = true;
     });
@@ -37,7 +71,12 @@
       const isText = tag === "INPUT" || tag === "TEXTAREA" || (target as HTMLElement).isContentEditable;
       if (!isText) return;
       if (sheetEl && sheetEl.contains(target)) return;
-      requestAnimationFrame(() => onClose());
+      requestAnimationFrame(() => {
+        onClose();
+        // Restore focus to whatever opened us so the user lands
+        // back on the trigger, not in a no-focus limbo.
+        previouslyFocused?.focus?.();
+      });
     };
     document.addEventListener("focusin", handleFocusIn);
     return () => {
@@ -77,6 +116,7 @@
     aria-label={title}
     tabindex="-1"
     onclick={(event) => event.stopPropagation()}
+    onkeydown={handleSheetKeydown}
   >
     <div class="mobile-sheet-handle"></div>
     <div class="mobile-sheet-header">
