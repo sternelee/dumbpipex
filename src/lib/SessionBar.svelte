@@ -24,7 +24,9 @@
   let containerWidth = $state(0);
   let tabWidths = $state<Map<string, number>>(new Map());
   let dropdownOpen = $state(false);
+  let dropdownUp = $state(false);
   let dropdownRef = $state<HTMLDivElement | null>(null);
+  let sessionBarRef = $state<HTMLElement | null>(null);
 
   function hasActivePty() {
     return Boolean(activePtyId);
@@ -67,6 +69,19 @@
     onSelectPty(ptyId);
   }
 
+  function toggleDropdown() {
+    if (!dropdownOpen && sessionBarRef) {
+      // Decide direction at open time. If the bar sits in the top
+      // half of the viewport, opening downward would push the menu
+      // over the terminal; opening upward keeps it visible above
+      // the bar instead.
+      const rect = sessionBarRef.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      dropdownUp = rect.top > vh / 2;
+    }
+    dropdownOpen = !dropdownOpen;
+  }
+
   // 点击外部关闭下拉
   function handleClickOutside(event: MouseEvent) {
     if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
@@ -99,6 +114,7 @@
 
 {#if ptys.length > 0}
   <div
+    bind:this={sessionBarRef}
     class="session-bar"
     class:compact={compactLayout}
     class:keyboard-open={keyboardOpen}
@@ -162,18 +178,18 @@
             <button
               class="tab more-tab"
               class:active={dropdownOpen}
-              onclick={() => (dropdownOpen = !dropdownOpen)}
+              onclick={toggleDropdown}
               title={`${hiddenPtys.length} 个隐藏会话`}
             >
               <span class="tab-content">
                 <span class="more-label">更多</span>
                 <span class="more-badge">{hiddenPtys.length}</span>
               </span>
-              <span class="more-arrow" class:open={dropdownOpen}>▾</span>
+              <span class="more-arrow" class:open={dropdownOpen} class:flip={dropdownUp}>▾</span>
             </button>
 
             {#if dropdownOpen}
-              <div class="dropdown-menu">
+              <div class="dropdown-menu" class:up={dropdownUp}>
                 {#each hiddenPtys as pty (pty.pty_id)}
                   <button
                     class="dropdown-item"
@@ -434,6 +450,33 @@
     animation: dropdown-in 160ms ease both;
   }
 
+  /* Open upward when the bar is in the top half of the viewport,
+     so the menu doesn't cover the terminal it sits above. */
+  .dropdown-menu.up {
+    top: auto;
+    bottom: calc(100% + 0.4rem);
+    animation-name: dropdown-in-up;
+  }
+
+  .more-arrow.flip {
+    transform: rotate(180deg);
+  }
+
+  .more-arrow.open.flip {
+    transform: rotate(0deg);
+  }
+
+  @keyframes dropdown-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
   @keyframes dropdown-in {
     from {
       opacity: 0;
@@ -442,6 +485,13 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dropdown-menu,
+    .dropdown-menu.up {
+      animation: none;
     }
   }
 
