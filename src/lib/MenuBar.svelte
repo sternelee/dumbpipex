@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { SessionPhase, TerminalThemeOption } from "$lib/terminal-ui";
 
   type MenuId = "file" | "view" | null;
@@ -52,8 +53,18 @@
   } = $props();
 
   let openMenu = $state<MenuId>(null);
-
+  let activeIndex = $state(0);
   let menuBarRef = $state<HTMLElement | null>(null);
+  let triggerRefs: Partial<Record<NonNullable<MenuId>, HTMLButtonElement>> = {};
+  let itemRefs = $state<(HTMLButtonElement | null)[]>([]);
+
+  const MENU_ORDER: NonNullable<MenuId>[] = ["file", "view"];
+
+  function getActionItems(id: MenuId): Extract<MenuItem, { kind: "action" }>[] {
+    return getMenuItems(id).filter(
+      (i): i is Extract<MenuItem, { kind: "action" }> => i.kind === "action",
+    );
+  }
 
   function getMenuItems(id: MenuId): MenuItem[] {
     if (id === "file") {
@@ -109,8 +120,155 @@
     return "var(--menu-dot-idle, #94a3b8)";
   }
 
-  function toggleMenu(id: MenuId) {
-    openMenu = openMenu === id ? null : id;
+  async function openWithFocus(id: NonNullable<MenuId>) {
+    openMenu = id;
+    activeIndex = 0;
+    await tick();
+    focusActiveItem();
+  }
+
+  function toggleMenu(id: NonNullable<MenuId>) {
+    if (openMenu === id) {
+      openMenu = null;
+    } else {
+      void openWithFocus(id);
+    }
+  }
+
+  function focusActiveItem() {
+    const item = itemRefs[activeIndex];
+    item?.focus();
+  }
+
+  function focusNextItem() {
+    const items = getActionItems(openMenu);
+    if (items.length === 0) return;
+    for (let i = 1; i <= items.length; i++) {
+      const next = (activeIndex + i) % items.length;
+      const candidate = itemRefs[next];
+      if (candidate && !candidate.disabled) {
+        activeIndex = next;
+        candidate.focus();
+        return;
+      }
+    }
+  }
+
+  function focusPrevItem() {
+    const items = getActionItems(openMenu);
+    if (items.length === 0) return;
+    for (let i = 1; i <= items.length; i++) {
+      const prev = (activeIndex - i + items.length) % items.length;
+      const candidate = itemRefs[prev];
+      if (candidate && !candidate.disabled) {
+        activeIndex = prev;
+        candidate.focus();
+        return;
+      }
+    }
+  }
+
+  function focusFirstEnabled() {
+    const items = getActionItems(openMenu);
+    for (let i = 0; i < items.length; i++) {
+      const candidate = itemRefs[i];
+      if (candidate && !candidate.disabled) {
+        activeIndex = i;
+        candidate.focus();
+        return;
+      }
+    }
+  }
+
+  function focusLastEnabled() {
+    const items = getActionItems(openMenu);
+    for (let i = items.length - 1; i >= 0; i--) {
+      const candidate = itemRefs[i];
+      if (candidate && !candidate.disabled) {
+        activeIndex = i;
+        candidate.focus();
+        return;
+      }
+    }
+  }
+
+  function switchMenu(direction: 1 | -1) {
+    if (!openMenu) return;
+    const idx = MENU_ORDER.indexOf(openMenu);
+    const next = (idx + direction + MENU_ORDER.length) % MENU_ORDER.length;
+    const target = MENU_ORDER[next];
+    triggerRefs[target]?.focus();
+    void openWithFocus(target);
+  }
+
+  function closeMenus(returnFocus = false) {
+    const wasOpen = openMenu;
+    openMenu = null;
+    if (returnFocus && wasOpen) {
+      triggerRefs[wasOpen]?.focus();
+    }
+  }
+
+  function handleItemKeydown(event: KeyboardEvent, item: MenuItem) {
+    if (item.kind !== "action") return;
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        focusNextItem();
+        return;
+      case "ArrowUp":
+        event.preventDefault();
+        focusPrevItem();
+        return;
+      case "Home":
+        event.preventDefault();
+        focusFirstEnabled();
+        return;
+      case "End":
+        event.preventDefault();
+        focusLastEnabled();
+        return;
+      case "ArrowRight":
+        event.preventDefault();
+        switchMenu(1);
+        return;
+      case "ArrowLeft":
+        event.preventDefault();
+        switchMenu(-1);
+        return;
+      case "Escape":
+        event.preventDefault();
+        closeMenus(true);
+        return;
+      case "Tab":
+        closeMenus(false);
+        return;
+    }
+  }
+
+  function handleTriggerKeydown(event: KeyboardEvent, id: NonNullable<MenuId>) {
+    switch (event.key) {
+      case "ArrowDown":
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        void openWithFocus(id);
+        return;
+      case "ArrowRight":
+        event.preventDefault();
+        switchMenu(1);
+        return;
+      case "ArrowLeft":
+        event.preventDefault();
+        switchMenu(-1);
+        return;
+      case "Escape":
+        if (openMenu === id) {
+          event.preventDefault();
+          openMenu = null;
+        }
+        return;
+    }
   }
 
   function handleItemClick(item: MenuItem) {
@@ -120,7 +278,7 @@
     openMenu = null;
   }
 
-  function handleMenuHover(id: MenuId) {
+  function handleMenuHover(id: NonNullable<MenuId>) {
     if (openMenu !== null) {
       openMenu = id;
     }
@@ -131,82 +289,77 @@
       openMenu = null;
     }
   }
+
+  function globalEscape(event: KeyboardEvent) {
+    if (event.key === "Escape" && openMenu) {
+      event.preventDefault();
+      closeMenus(true);
+    }
+  }
 </script>
 
-<svelte:window onclick={handleClickOutside} />
+<svelte:window onclick={handleClickOutside} onkeydown={globalEscape} />
 
-<div class="menu-bar" bind:this={menuBarRef}>
+<div class="menu-bar" bind:this={menuBarRef} role="menubar" aria-label="应用菜单">
   <div class="menu-bar-left">
-    <span class="menu-dot" style:color={phaseColor(sessionPhase)}>
+    <span class="menu-dot" style:color={phaseColor(sessionPhase)} aria-hidden="true">
       {phaseDot(sessionPhase)}
     </span>
-    <span class="menu-agent-name">{agentName || "dumbpipex"}</span>
+    <span class="menu-agent-name" aria-label={`已连接: ${agentName || "dumbpipex"}`}>
+      {agentName || "dumbpipex"}
+    </span>
   </div>
 
   <div class="menu-bar-right">
-    <!-- File -->
-    <div class="menu-item-wrapper">
-      <button
-        class="menu-trigger"
-        class:active={openMenu === "file"}
-        onclick={() => toggleMenu("file")}
-        onmouseenter={() => handleMenuHover("file")}
-      >
-        File
-      </button>
-      {#if openMenu === "file"}
-        <div class="menu-dropdown">
-          {#each getMenuItems("file") as item}
-            {#if item.kind === "separator"}
-              <div class="menu-separator"></div>
-            {:else if item.kind === "active"}
-              <div class="menu-section-label">{item.label}</div>
-            {:else}
-              <button
-                class="menu-item"
-                class:disabled={item.disabled ?? false}
-                onclick={() => handleItemClick(item)}
-              >
-                <span class="menu-item-label">{item.label}</span>
-                {#if item.shortcut}
-                  <span class="menu-item-shortcut">{item.shortcut}</span>
-                {/if}
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <!-- View -->
-    <div class="menu-item-wrapper">
-      <button
-        class="menu-trigger"
-        class:active={openMenu === "view"}
-        onclick={() => toggleMenu("view")}
-        onmouseenter={() => handleMenuHover("view")}
-      >
-        View
-      </button>
-      {#if openMenu === "view"}
-        <div class="menu-dropdown">
-          {#each getMenuItems("view") as item}
-            {#if item.kind === "separator"}
-              <div class="menu-separator"></div>
-            {:else if item.kind === "active"}
-              <div class="menu-section-label">{item.label}</div>
-            {:else}
-              <button class="menu-item" class:disabled={item.disabled ?? false} onclick={() => handleItemClick(item)}>
-                <span class="menu-item-label">{item.label}</span>
-                {#if item.shortcut}
-                  <span class="menu-item-shortcut">{item.shortcut}</span>
-                {/if}
-              </button>
-            {/if}
-          {/each}
-        </div>
-      {/if}
-    </div>
+    {#each MENU_ORDER as id (id)}
+      {@const items = openMenu === id ? getMenuItems(id) : []}
+      <div class="menu-item-wrapper">
+        <button
+          bind:this={triggerRefs[id]}
+          class="menu-trigger"
+          class:active={openMenu === id}
+          aria-haspopup="menu"
+          aria-expanded={openMenu === id}
+          id={`menu-trigger-${id}`}
+          onclick={() => toggleMenu(id)}
+          onmouseenter={() => handleMenuHover(id)}
+          onkeydown={(e) => handleTriggerKeydown(e, id)}
+        >
+          {id === "file" ? "File" : "View"}
+        </button>
+        {#if openMenu === id}
+          <div
+            class="menu-dropdown"
+            role="menu"
+            aria-labelledby={`menu-trigger-${id}`}
+          >
+            {#each items as item, idx (idx)}
+              {#if item.kind === "separator"}
+                <div class="menu-separator" role="separator"></div>
+              {:else if item.kind === "active"}
+                <div class="menu-section-label" role="presentation">{item.label}</div>
+              {:else}
+                <button
+                  class="menu-item"
+                  class:disabled={item.disabled ?? false}
+                  role="menuitem"
+                  bind:this={itemRefs[idx]}
+                  disabled={item.disabled}
+                  tabindex={openMenu === id ? -1 : -1}
+                  onclick={() => handleItemClick(item)}
+                  onkeydown={(e) => handleItemKeydown(e, item)}
+                >
+                  <span class="menu-item-label">{item.label}</span>
+                  {#if item.shortcut}
+                    <span class="menu-item-shortcut" aria-hidden="true">{item.shortcut}</span>
+                  {/if}
+                </button>
+              {/if}
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/each}
   </div>
 </div>
 
@@ -267,12 +420,20 @@
     font-size: 0.78rem;
     font-weight: 500;
     white-space: nowrap;
+    transition: background-color 120ms ease, color 120ms ease;
   }
 
   .menu-trigger:hover,
   .menu-trigger.active {
     background: rgba(59, 130, 246, 0.15);
     color: #e2e8f0;
+  }
+
+  .menu-trigger:focus-visible {
+    outline: none;
+    background: rgba(59, 130, 246, 0.22);
+    color: #fff;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
   }
 
   .menu-dropdown {
@@ -303,6 +464,12 @@
     }
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .menu-dropdown {
+      animation: none;
+    }
+  }
+
   .menu-section-label {
     padding: 0.28rem 0.6rem;
     font-size: 0.72rem;
@@ -325,11 +492,20 @@
     font-size: 0.8rem;
     text-align: left;
     white-space: nowrap;
+    transition: background-color 80ms ease;
   }
 
   .menu-item:hover {
     background: rgba(59, 130, 246, 0.18);
     color: #fff;
+  }
+
+  .menu-item:focus-visible,
+  .menu-item:focus {
+    outline: none;
+    background: rgba(59, 130, 246, 0.28);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(147, 197, 253, 0.55);
   }
 
   .menu-item.disabled {
@@ -353,3 +529,4 @@
     background: rgba(148, 163, 184, 0.15);
   }
 </style>
+
