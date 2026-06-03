@@ -253,8 +253,8 @@
                 if (busy) return;
                 if (pty.pty_id !== activePtyId) onSelectPty(pty.pty_id);
                 onCloseActivePty();
-              }}
-            >×</span>
+              }}>×</span
+            >
           </button>
         {/each}
 
@@ -270,7 +270,11 @@
                 <span class="more-label">更多</span>
                 <span class="more-badge">{hiddenPtys.length}</span>
               </span>
-              <span class="more-arrow" class:open={dropdownOpen} class:flip={dropdownUp}>▾</span>
+              <span
+                class="more-arrow"
+                class:open={dropdownOpen}
+                class:flip={dropdownUp}>▾</span
+              >
             </button>
 
             {#if dropdownOpen}
@@ -280,7 +284,9 @@
                     class="dropdown-item"
                     class:active={pty.pty_id === activePtyId}
                     class:exited={pty.exited}
-                    aria-current={pty.pty_id === activePtyId ? "page" : undefined}
+                    aria-current={pty.pty_id === activePtyId
+                      ? "page"
+                      : undefined}
                     onclick={() => selectPty(pty.pty_id)}
                   >
                     <span
@@ -422,12 +428,14 @@
     font-size: 0.72rem;
     color: #94a3b8;
     font-weight: 500;
+    display: none;
   }
 
   .tab-exit {
     font-size: 0.6rem;
     color: #ef4444;
     margin-left: 0.15rem;
+    display: none;
   }
 
   .tab-close {
@@ -442,7 +450,10 @@
     font-size: 0.95rem;
     line-height: 1;
     opacity: 0;
-    transition: opacity 120ms ease, color 120ms ease, background-color 120ms ease;
+    transition:
+      opacity 120ms ease,
+      color 120ms ease,
+      background-color 120ms ease;
     flex-shrink: 0;
   }
 
@@ -743,7 +754,7 @@
     }
 
     .session-bar.compact .tab-close {
-      width: 1.75rem;  /* ~28px visual, but with 0.4rem hit padding below */
+      width: 1.75rem; /* ~28px visual, but with 0.4rem hit padding below */
       height: 1.75rem;
       font-size: 0.95rem;
       margin-left: 0.3rem;

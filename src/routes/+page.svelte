@@ -463,6 +463,20 @@
 
   async function closeRemotePty(ptyId = activePtyId) {
     if (!ptyId || isBusy()) return;
+    const pty = getPty(ptyId);
+    if (pty?.exited) {
+      // Already exited — remove immediately. No PtyExited event
+      // will arrive because state.attached was already taken by
+      // mark_exited during natural exit.
+      ptys = ptys.filter((item) => item.pty_id !== ptyId);
+      ptyApis.get(ptyId)?.finish();
+      if (activePtyId === ptyId) {
+        const fallback = ptys.find((item) => !item.exited)?.pty_id ?? ptys[0]?.pty_id ?? null;
+        if (fallback) await selectPty(fallback);
+      }
+      status = `${ptyId} 已关闭`;
+      return;
+    }
     status = `正在关闭 ${ptyId}...`;
     try {
       await invoke("close_pty", { ptyId });
