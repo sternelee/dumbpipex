@@ -8,8 +8,10 @@
     status,
     sessionPhase,
     busy,
+    viewerMode,
     onTicketChange,
     onShellChange,
+    onViewerModeChange,
     onConnect,
   }: {
     ticket: string;
@@ -17,8 +19,10 @@
     status: string;
     sessionPhase: SessionPhase;
     busy: boolean;
+    viewerMode: boolean;
     onTicketChange: (value: string) => void;
     onShellChange: (value: string) => void;
+    onViewerModeChange: (value: boolean) => void;
     onConnect: () => void;
   } = $props();
 
@@ -167,6 +171,19 @@
             event.key === "Enter" && !busy && ticketLooksValid && onConnect()}
           disabled={busy}
         />
+      </label>
+
+      <label class="field viewer-toggle">
+        <input
+          type="checkbox"
+          checked={viewerMode}
+          onchange={(event) => onViewerModeChange((event.currentTarget as HTMLInputElement).checked)}
+          disabled={busy}
+        />
+        <span class="viewer-label">
+          <strong>只读连接（viewer）</strong>
+          <small>只能查看现有 PTY 的输出，不能发送输入、调整大小或关闭会话。</small>
+        </span>
       </label>
 
       <button
@@ -577,5 +594,34 @@
     .home-grid {
       grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
     }
+  }
+
+  .viewer-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0.6rem;
+    background: rgba(15, 23, 42, 0.35);
+  }
+
+  .viewer-toggle input {
+    margin-top: 0.18rem;
+    width: 1rem;
+    height: 1rem;
+    accent-color: #3b82f6;
+  }
+
+  .viewer-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.88rem;
+  }
+
+  .viewer-label small {
+    color: rgba(148, 163, 184, 0.85);
+    font-size: 0.75rem;
   }
 </style>

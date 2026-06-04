@@ -48,6 +48,8 @@ enum RemoteEvent {
     PtyExited { pty_id: String, exit_code: Option<i32> },
     PtyDetached { pty_id: String, reason: String },
     Error { message: String },
+    UploadAccepted { name: String, path: String },
+    UploadError { name: String, message: String },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -251,6 +253,22 @@ async fn ping_remote(state: State<'_, RemoteManager>) -> Result<(), String> {
         .map_err(err_to_string)
 }
 
+#[tauri::command]
+async fn upload_file(
+    state: State<'_, RemoteManager>,
+    name: String,
+    mime: String,
+    data: String,
+) -> Result<(), String> {
+    let size = data.len() as u64;
+    send_command(
+        &state.inner,
+        ClientMessage::Upload { name, mime, size, data },
+    )
+    .await
+    .map_err(err_to_string)
+}
+
 async fn send_command(inner: &RemoteManagerInner, message: ClientMessage) -> Result<()> {
     let sender = {
         let guard = inner.session.lock().await;
@@ -304,6 +322,12 @@ fn emit_server_message(app: &AppHandle, message: ServerMessage) -> Result<()> {
             RemoteEvent::PtyDetached { pty_id, reason }
         }
         ServerMessage::Error { message } => RemoteEvent::Error { message },
+        ServerMessage::UploadAccepted { name, path } => {
+            RemoteEvent::UploadAccepted { name, path }
+        }
+        ServerMessage::UploadError { name, message } => {
+            RemoteEvent::UploadError { name, message }
+        }
         ServerMessage::Pong => return Ok(()),
     };
     emit_event(app, event)
@@ -337,7 +361,8 @@ pub fn run() {
             send_pty_input,
             resize_pty,
             close_pty,
-            ping_remote
+            ping_remote,
+            upload_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

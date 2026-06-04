@@ -1,5 +1,13 @@
 import type { RemotePtyTheme } from "$lib/remote-pty-types";
 
+// Wire protocol limits. MUST stay in sync with `MAX_INPUT_BYTES` /
+// `MAX_INPUT_CHUNK_BYTES` in `crates/dumbpipex-core/src/lib.rs`.
+// These are duplicated here rather than fetched via Tauri IPC
+// because they are referenced on the input hot path and a single
+// keystroke must not be blocked on an IPC round-trip.
+export const MAX_INPUT_BYTES = 64 * 1024;
+export const MAX_INPUT_CHUNK_BYTES = 16 * 1024;
+
 export type RemoteEvent =
 	| { type: "disconnected"; reason?: string | null }
 	| {
@@ -10,18 +18,27 @@ export type RemoteEvent =
 			rows: number;
 			resume_token: string;
 			resumed: boolean;
+			bytes_dropped?: number;
 	  }
 	| { type: "pty_output"; pty_id: string; data: string }
 	| { type: "pty_exited"; pty_id: string; exit_code?: number | null }
 	| { type: "pty_detached"; pty_id: string; reason: string }
-	| { type: "error"; message: string };
-
+	| { type: "error"; message: string }
+	| { type: "upload_accepted"; name: string; path: string }
+	| { type: "upload_error"; name: string; message: string }
+	| { type: "pong"; nonce: number };
 export type PtyRecoveryInfo = {
 	pty_id: string;
 	shell: string;
 	cols: number;
 	rows: number;
+	/// Empty string for PTYs that are already attached to another
+	/// client. Frontends should filter those out of the auto-resume
+	/// list so the user does not see an "available" session they
+	/// cannot attach to.
 	resume_token: string;
+	attached?: boolean;
+	bytes_dropped?: number;
 };
 
 export type ConnectTicketResponse = {
@@ -44,6 +61,11 @@ export type PtySession = {
 	rows: number;
 	exited: boolean;
 	exit_code?: number | null;
+	/// Cumulative bytes the agent has dropped for this PTY (backlog
+	/// ring-buffer trim + live output the reader thread had to drop
+	/// when the event mpsc was full). Surfaced in the tab title and as
+	/// a status toast so silent truncation stops being a foot-gun.
+	bytes_dropped?: number;
 };
 
 export type ShortcutButton = { label: string; data: string; hint?: string };

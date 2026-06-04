@@ -15,6 +15,7 @@
     SessionMode,
     SessionPhase,
   } from "$lib/terminal-ui";
+  import { MAX_INPUT_CHUNK_BYTES } from "$lib/terminal-ui";
 
   type PersistedPtyState = {
     pty_id: string;
@@ -30,13 +31,36 @@
     ptys: PersistedPtyState[];
   };
 
+  // The on-disk recovery state for `localStorage` is intentionally
+  // **non-sensitive**: it holds the autoReconnect preference and the
+  // per-PTY mode map. The ticket itself lives in a Tauri-managed file
+  // under `app_data_dir/ticket.json` (mode 0600 on Unix), written via
+  // the `save_ticket` / `load_ticket` / `clear_ticket` commands. This
+  // means a WebView XSS can flip a switch but cannot exfiltrate the
+  // agent credential from localStorage. `ticket` and `shell` are still
+  // part of the in-memory shape because they come back from the legacy
+  // v1 store; on write we emit them as empty strings.
+  type PersistedNonSecretState = {
+    version: 1 | 2;
+    autoReconnect: boolean;
+    ptys: PersistedPtyState[];
+  };
+
   const STORAGE_KEY = "dumbpipex:recovery-state";
   const STORAGE_VERSION = 2;
   const MAX_RECONNECT_ATTEMPTS = 10;
   const KEEPALIVE_INTERVAL_MS = 20_000;
+  // A Pong is considered missed if it has not arrived within
+  // KEEPALIVE_INTERVAL_MS * 3 of the corresponding Ping. Three
+  // consecutive misses trigger an explicit reconnect because the
+  // peer is almost certainly unreachable, and the underlying QUIC
+  // path will time out anyway.
+  const PONG_DEADLINE_MS = KEEPALIVE_INTERVAL_MS * 3;
+  const MAX_MISSED_PONGS = 3;
 
   let ticket = $state("");
   let shell = $state("");
+  let viewerMode = $state(false);
   let status = $state("等待连接");
   let connected = $state(false);
   let sessionPhase = $state<SessionPhase>("idle");
@@ -56,6 +80,26 @@
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempt = 0;
   let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  let pongWatchdog: ReturnType<typeof setTimeout> | null = null;
+  let nextPingNonce = 0;
+  // Pings sent but not yet acknowledged. Map keyed by nonce so an
+  // out-of-order Pong (e.g. across a reconnect+re-attach) still
+  // resolves to the right entry. Capped at the last 8 to keep the
+  // map from growing on a long-lived dead connection.
+  const pendingPings = new Map<number, number>();
+  let missedPongs = 0;
+  let lastRttMs: number | null = null;
+
+  // Debounce localStorage writes. writeRecoveryState is called from
+  // 15+ places (PtyCreated, PtyExited, mode changes, tab switches) and
+  // each call is a sync localStorage.setItem. During a busy session
+  // this can hit 50+ writes/sec which stutters the main thread. We
+  // coalesce them into a single write per `RECOVERY_DEBOUNCE_MS` window.
+  // The debounce window is short enough that a crash loses at most a
+  // few hundred ms of state.
+  const RECOVERY_DEBOUNCE_MS = 200;
+  let recoveryDirty = false;
+  let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
 
   function isBusy() {
     return (
@@ -100,12 +144,37 @@
   }
 
   function writeRecoveryState() {
+    // Mark the recovery state dirty and schedule a coalesced write.
+    // Multiple calls within RECOVERY_DEBOUNCE_MS collapse into one.
+    // Callers that need durability (e.g. user-initiated disconnect)
+    // should follow up with `flushRecoveryState()`.
+    recoveryDirty = true;
+    if (recoveryTimer !== null) return;
+    recoveryTimer = setTimeout(() => {
+      recoveryTimer = null;
+      flushRecoveryState();
+    }, RECOVERY_DEBOUNCE_MS);
+  }
+
+  /// Synchronous write of the current recovery state. Skipped if the
+  /// state is not dirty, so it's safe to call from any path. Use
+  /// this on the disconnect path (we want the cleared state on disk
+  /// before the IPC round-trip) and on visibilitychange.
+  function flushRecoveryState() {
+    if (recoveryTimer !== null) {
+      clearTimeout(recoveryTimer);
+      recoveryTimer = null;
+    }
+    if (!recoveryDirty) return;
+    recoveryDirty = false;
+
     if (typeof localStorage === "undefined") return;
 
-    const persisted: PersistedRecoveryState = {
+    // Strip secrets before writing to localStorage. The ticket lives
+    // in the Tauri-managed ticket file (0600); `shell` is harmless
+    // but no longer needed in the recovery state — drop it too.
+    const persisted: PersistedNonSecretState = {
       version: STORAGE_VERSION,
-      ticket,
-      shell,
       autoReconnect: autoReconnectEnabled,
       ptys: ptys
         .filter((pty) => !pty.exited)
@@ -117,7 +186,11 @@
         .filter((pty) => pty.resume_token.length > 0),
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    } catch {
+      // Quota / private-mode errors. Recovery is best-effort.
+    }
   }
 
   function cancelReconnect() {
@@ -132,12 +205,11 @@
     // Send a Ping every 20s so relay connections and idle NAT mappings
     // stay warm. The agent already replies with Pong; we just need the
     // bytes to traverse the path in both directions to keep middleboxes
-    // from dropping the flow.
+    // from dropping the flow. We also arm a watchdog that treats three
+    // consecutive missed Pongs as a dead connection.
     keepaliveTimer = setInterval(() => {
       if (!connected) return;
-      void invoke("ping_remote").catch((error) => {
-        status = `keepalive 失败: ${String(error)}`;
-      });
+      sendPing();
     }, KEEPALIVE_INTERVAL_MS);
   }
 
@@ -145,6 +217,76 @@
     if (keepaliveTimer) {
       clearInterval(keepaliveTimer);
       keepaliveTimer = null;
+    }
+    if (pongWatchdog) {
+      clearTimeout(pongWatchdog);
+      pongWatchdog = null;
+    }
+    pendingPings.clear();
+    missedPongs = 0;
+    lastRttMs = null;
+  }
+
+  function sendPing() {
+    const nonce = ++nextPingNonce;
+    pendingPings.set(nonce, Date.now());
+    // Cap the in-flight set so a long-lived dead connection cannot
+    // grow it without bound; if we have more than 8 unanswered pings
+    // something is very wrong and we should already have reconnected.
+    if (pendingPings.size > 8) {
+      const oldest = pendingPings.keys().next().value;
+      if (oldest !== undefined) pendingPings.delete(oldest);
+    }
+    void invoke("ping_remote", { nonce }).catch((error) => {
+      // A failed invoke means the Tauri command itself errored, which
+      // usually tracks a closed connection. The reader loop will
+      // surface `Disconnected` shortly; just log to status for now.
+      status = `keepalive 失败: ${String(error)}`;
+    });
+    armPongWatchdog();
+  }
+
+  function armPongWatchdog() {
+    if (pongWatchdog) clearTimeout(pongWatchdog);
+    pongWatchdog = setTimeout(() => {
+      pongWatchdog = null;
+      markPongMissed();
+    }, PONG_DEADLINE_MS);
+  }
+
+  function recordPong(nonce: number) {
+    const sent = pendingPings.get(nonce);
+    if (sent === undefined) {
+      // Stale Pong from a previous session. Ignore.
+      return;
+    }
+    pendingPings.delete(nonce);
+    missedPongs = 0;
+    lastRttMs = Date.now() - sent;
+    if (pongWatchdog) {
+      clearTimeout(pongWatchdog);
+      pongWatchdog = null;
+    }
+    if (pendingPings.size > 0) {
+      // Other in-flight pings: arm a new watchdog for the oldest
+      // outstanding one.
+      armPongWatchdog();
+    }
+  }
+
+  function markPongMissed() {
+    if (!connected) return;
+    missedPongs += 1;
+    if (missedPongs >= MAX_MISSED_PONGS) {
+      const message = `连续 ${MAX_MISSED_PONGS} 次未收到 Pong，连接可能已断开，触发重连`;
+      status = message;
+      toast(message, "error", 6000);
+      // The reader loop's Disconnected event will also fire when
+      // iroh tears the connection down, but that can take 30+
+      // seconds on a wedged NAT. Force a reconnect now.
+      manualDisconnectPending = false;
+      scheduleReconnect();
+      stopKeepalive();
     }
   }
 
@@ -167,10 +309,42 @@
     }, delay);
   }
 
-  function bytesToBase64Url(bytes: Uint8Array): string {
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  /// Encode bytes as URL-safe base64 (no padding) off the main
+  /// thread. The legacy `btoa(String.fromCharCode(...))` trick
+  /// blocks the UI for the duration of the encoding — ~10ms for a
+  /// 16 KiB chunk, which is enough to drop a frame on a 60 fps
+  /// mobile WebView. `FileReader.readAsDataURL` dispatches the read
+  /// to the browser's IO thread, so the result resolves on a later
+  /// microtask and the main thread can keep painting.
+  function bytesToBase64Url(bytes: Uint8Array): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        // `readAsDataURL` produces
+        //   "data:<mime>;base64,<payload>"
+        // Strip the prefix and turn the result into URL-safe base64
+        // (matching the agent's URL_SAFE_NO_PAD decoder).
+        const comma = result.indexOf(",");
+        const b64 = comma >= 0 ? result.slice(comma + 1) : result;
+        resolve(
+          b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""),
+        );
+      };
+      reader.onerror = () => reject(reader.error ?? new Error("FileReader failed"));
+      reader.readAsDataURL(new Blob([bytes]));
+    });
+  }
+
+  /// Human-friendly byte count for the "X bytes dropped" indicator.
+  /// `KiB` style is fine for a tool that already uses IEC units
+  /// implicitly (PTY sizes in cols/rows, xterm scrollback in lines).
+  function formatBytes(n: number): string {
+    if (!Number.isFinite(n) || n < 0) return "0 B";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(2)} MiB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
   }
 
   function getPty(ptyId: string | null) {
@@ -316,10 +490,20 @@
     const pty = getWritableActivePty();
     if (!pty) return;
     trackInputMode(pty.pty_id, data);
-    await invoke("send_pty_input", {
-      ptyId: pty.pty_id,
-      data: bytesToBase64Url(encoder.encode(data)),
-    });
+    // The agent rejects any single `PtyInput` payload larger than
+    // `MAX_INPUT_BYTES`. Chunk at `MAX_INPUT_CHUNK_BYTES` boundaries
+    // on the UTF-16 string so we never split a surrogate pair in
+    // the middle. For a single keystroke this loop runs once and is
+    // a no-op.
+    const bytes = encoder.encode(data);
+    for (let offset = 0; offset < bytes.length; offset += MAX_INPUT_CHUNK_BYTES) {
+      const end = Math.min(offset + MAX_INPUT_CHUNK_BYTES, bytes.length);
+      const slice = bytes.subarray(offset, end);
+      await invoke("send_pty_input", {
+        ptyId: pty.pty_id,
+        data: await bytesToBase64Url(slice),
+      });
+    }
   }
 
   async function triggerShortcut(data: string) {
@@ -364,7 +548,10 @@
     }
     status = isAutoReconnect ? "网络已断开，正在自动重连..." : "正在连接远程服务...";
     try {
-      const result = await invoke<ConnectTicketResponse>("connect_ticket", { ticket: ticket.trim() });
+      const result = await invoke<ConnectTicketResponse>("connect_ticket", {
+        ticket: ticket.trim(),
+        viewer: viewerMode,
+      });
       connected = true;
       agentName = result.agent_name;
       resetPtyState();
@@ -372,6 +559,15 @@
       sessionPhase = "ready";
       autoReconnectEnabled = true;
       reconnectAttempt = 0;
+      // Persist the ticket to the Tauri-managed file (0600 on Unix)
+      // so subsequent launches can auto-reconnect. Failures here are
+      // non-fatal — the user is already connected, the worst case is
+      // no auto-reconnect on next launch.
+      if (!isAutoReconnect) {
+        void invoke("save_ticket", { ticket: ticket.trim() }).catch((error) => {
+          status = `保存 ticket 失败: ${String(error)}`;
+        });
+      }
       writeRecoveryState();
       startKeepalive();
       const resumed = await resumeExistingSessions(result.sessions);
@@ -384,14 +580,20 @@
       status = message;
       toast(message, "error", 6000);
       sessionPhase = "idle";
+      // On failure we intentionally do NOT call `resetPtyState()`:
+      // a transient network error during reconnect should leave the
+      // in-memory PTY list (and the localStorage snapshot) untouched
+      // so a subsequent successful reconnect re-attaches the same
+      // sessions. `writeRecoveryState` is a no-op when nothing
+      // changed (H6 debounce), so it is safe to call here. The two
+      // branches differ only in `autoReconnectEnabled`, which is
+      // already true on auto-reconnect attempts and false on the
+      // first manual attempt — we keep that value either way.
       if (isAutoReconnect || autoReconnectEnabled) {
         autoReconnectEnabled = true;
-        writeRecoveryState();
         scheduleReconnect();
-      } else {
-        autoReconnectEnabled = false;
-        writeRecoveryState();
       }
+      writeRecoveryState();
     }
   }
 
@@ -412,7 +614,14 @@
       status = "已断开";
       sessionPhase = "idle";
       resetPtyState();
-      writeRecoveryState();
+      // Forget the persisted credential on a clean user disconnect.
+      // We keep it across transient network failures (handled by
+      // scheduleReconnect without invoking this function) so the user
+      // does not have to re-paste the ticket after a WiFi blip.
+      void invoke("clear_ticket").catch(() => undefined);
+      // Force-flush the recovery state: the next launch should not
+      // see `autoReconnect=true` lingering from before the disconnect.
+      flushRecoveryState();
     } catch (error) {
       const message = String(error);
       status = message;
@@ -441,6 +650,26 @@
     } catch (error) {
       status = String(error);
       sessionPhase = connected ? "ready" : "idle";
+    }
+  }
+
+  async function uploadFile(file: File) {
+    if (!connected || isBusy()) return;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    await new Promise<void>((resolve) => {
+      reader.onloadend = () => resolve();
+    });
+    const base64 = (reader.result as string).split(",")[1];
+    try {
+      await invoke("upload_file", {
+        name: file.name,
+        mime: file.type || "application/octet-stream",
+        data: base64,
+      });
+    } catch (error) {
+      status = `上传失败: ${error}`;
+      toast(status, "error", 5000);
     }
   }
 
@@ -498,13 +727,31 @@
   async function resumeExistingSessions(sessions: PtyRecoveryInfo[]) {
     if (sessions.length === 0) return false;
 
+    // Filter out PTYs the agent reports as already-attached. The
+    // agent omits the resume token for these (M1), so the resume
+    // call below would be guaranteed to fail — skip them entirely
+    // and surface a status message so the user understands why some
+    // sessions are missing.
+    const resumable = sessions.filter((session) => {
+      if (session.attached) {
+        status = `${session.pty_id} 已被其他客户端接管，跳过恢复`;
+        return false;
+      }
+      if (!session.resume_token) {
+        status = `${session.pty_id} 缺少 resume token，跳过恢复`;
+        return false;
+      }
+      return true;
+    });
+    if (resumable.length === 0) return false;
+
     const stored = readRecoveryState();
     const storedModes = new Map(
       (stored?.ptys ?? []).map((pty) => [pty.pty_id, pty.mode] satisfies [string, SessionMode]),
     );
 
     let resumed = 0;
-    for (const session of sessions) {
+    for (const session of resumable) {
       ptyResumeTokens.set(session.pty_id, session.resume_token);
       const restoredMode = storedModes.get(session.pty_id);
       if (restoredMode) {
@@ -521,9 +768,10 @@
       } catch (error) {
         // The PTY can no longer be resumed (token mismatch after
         // agent restart, gone from sweeper, or rejected because
-        // another client is attached). Drop every trace of it from
-        // the local recovery state and in-memory caches so we do not
-        // try to resume it again on the next reconnect.
+        // another client took the slot between ListPtys and our
+        // resume). Drop every trace of it from the local recovery
+        // state and in-memory caches so we do not try to resume it
+        // again on the next reconnect.
         ptyResumeTokens.delete(session.pty_id);
         ptyModes.delete(session.pty_id);
         ptyInputBuffers.delete(session.pty_id);
@@ -564,6 +812,7 @@
           cols: payload.cols,
           rows: payload.rows,
           exited: false,
+          bytes_dropped: payload.bytes_dropped ?? 0,
         });
         ptySizes.set(payload.pty_id, { cols: payload.cols, rows: payload.rows });
         if (!ptyModes.has(payload.pty_id)) {
@@ -575,10 +824,18 @@
           ? `已恢复 ${payload.pty_id} (${payload.shell})`
           : `已创建 ${payload.pty_id} (${payload.shell})`;
         toast(status, "success", 2400);
+        // Surface backlog truncation immediately so the user knows
+        // the resumed session is not a complete replay.
+        const dropped = payload.bytes_dropped ?? 0;
+        if (dropped > 0) {
+          const message = `代理已丢失 ${formatBytes(dropped)} 输出（回放可能不完整）`;
+          toast(message, "warning", 6000);
+          status = message;
+        }
         sessionPhase = "ready";
         await tick();
         ptyApis.get(payload.pty_id)?.writeText(
-          `[pty] ${payload.shell} (${payload.cols}x${payload.rows})${payload.resumed ? " restored" : ""}\r\n`,
+          `[pty] ${payload.shell} (${payload.cols}x${payload.rows})${payload.resumed ? " restored" : ""}${dropped > 0 ? ` [已丢失 ${formatBytes(dropped)}]` : ""}\r\n`,
         );
         ptyApis.get(payload.pty_id)?.fit();
         ptyApis.get(payload.pty_id)?.focus();
@@ -663,6 +920,17 @@
         toast(payload.message, "error", 6000);
         if (connected) sessionPhase = "ready";
         break;
+      case "pong":
+        recordPong(payload.nonce);
+        break;
+      case "upload_accepted":
+        status = `文件 ${payload.name} 已上传到 ${payload.path}`;
+        toast(status, "success", 3000);
+        break;
+      case "upload_error":
+        status = `上传 ${payload.name} 失败: ${payload.message}`;
+        toast(status, "error", 5000);
+        break;
     }
   }
 
@@ -682,6 +950,10 @@
   onMount(() => {
     const persisted = readRecoveryState();
     if (persisted) {
+      // v1 (and early v2) stored the ticket in localStorage. We still
+      // honor it on read for back-compat, but on next save the
+      // recovery state will no longer include it. `shell` carries
+      // over the same way.
       ticket = persisted.ticket;
       shell = persisted.shell;
       autoReconnectEnabled = persisted.autoReconnect;
@@ -698,14 +970,24 @@
     // after restart". The listen() promise resolves synchronously in
     // tests but is a real Tauri IPC round-trip on device, hence the
     // observable race.
-    void listen<RemoteEvent>("remote-event", (event) => void handleRemoteEvent(event.payload)).then(
-      (dispose) => {
-        unlisten = dispose;
-        if (persisted?.autoReconnect && persisted.ticket.trim()) {
-          void connect(true);
-        }
-      },
-    );
+    //
+    // We also load the ticket from the Tauri-managed file. If the
+    // user has never connected (or has disconnected) the file is
+    // absent and we silently fall through to manual paste.
+    void (async () => {
+      const [dispose, storedTicket] = await Promise.all([
+        listen<RemoteEvent>("remote-event", (event) =>
+          void handleRemoteEvent(event.payload)),
+        invoke<string | null>("load_ticket").catch(() => null),
+      ]);
+      unlisten = dispose;
+      if (storedTicket && !ticket.trim()) {
+        ticket = storedTicket;
+      }
+      if (autoReconnectEnabled && ticket.trim()) {
+        void connect(true);
+      }
+    })();
 
     syncViewportHeight();
 
@@ -731,7 +1013,19 @@
     return () => {
       cancelReconnect();
       stopKeepalive();
-      void invoke("disconnect_ticket").catch(() => undefined);
+      // Flush any pending recovery-state write synchronously so a
+      // page navigation / app close does not lose the most recent
+      // state.
+      flushRecoveryState();
+      // In Vite dev mode, `onMount` cleanup fires on every HMR
+      // reload of the page module. Issuing `disconnect_ticket`
+      // there would kill the live iroh session mid-edit and force
+      // the user to re-paste the ticket after every code change.
+      // Skip the teardown in DEV; production builds (no HMR) still
+      // go through the normal disconnect path on app close.
+      if (!import.meta.env.DEV) {
+        void invoke("disconnect_ticket").catch(() => undefined);
+      }
       unlisten?.();
       vv?.removeEventListener("resize", onResize);
       window.removeEventListener("resize", onResize);
@@ -741,13 +1035,47 @@
       clearTimeout(t2);
     };
   });
+
+  // Flush pending writes when the tab/page is hidden, so a mobile OS
+  // backgrounding the WebView does not lose the last few hundred ms
+  // of recovery state.
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") flushRecoveryState();
+    });
+  }
 </script>
 
 <svelte:head>
   <title>dumbpipex</title>
 </svelte:head>
 
-<main class="app-shell">
+<input
+  type="file"
+  id="file-upload"
+  style="display:none"
+  onchange={(e) => {
+    const file = e.currentTarget.files?.[0];
+    if (file) uploadFile(file);
+    e.currentTarget.value = "";
+  }}
+/>
+<main
+  class="app-shell"
+  ondragover={(e) => { e.preventDefault(); }}
+  ondrop={(e) => {
+    e.preventDefault();
+    const file = e.dataTransfer?.files[0];
+    if (file && connected) uploadFile(file);
+  }}
+>
+  <button
+    class="upload-btn"
+    onclick={() => document.getElementById("file-upload")?.click()}
+    title="上传文件"
+  >
+    📎
+  </button>
   <ToastStack />
   {#if connected}
     <SessionWorkspace
@@ -778,6 +1106,7 @@
       status={status}
       sessionPhase={sessionPhase}
       busy={isBusy()}
+      viewerMode={viewerMode}
       onTicketChange={(value) => {
         ticket = value;
         writeRecoveryState();
@@ -785,6 +1114,9 @@
       onShellChange={(value) => {
         shell = value;
         writeRecoveryState();
+      }}
+      onViewerModeChange={(value) => {
+        viewerMode = value;
       }}
       onConnect={() => void connect()}
     />
@@ -855,5 +1187,28 @@
     :global(button) {
       font-size: 16px;
     }
+  }
+
+  .upload-btn {
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: 50;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 9999px;
+    background: #334155;
+    color: #e2e8f0;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    opacity: 0.8;
+    transition: opacity 0.15s;
+  }
+  .upload-btn:hover {
+    opacity: 1;
   }
 </style>

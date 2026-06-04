@@ -1458,6 +1458,25 @@ async fn handle_connection(
                 manager.resize_pty(&pty_id, cols, rows).await
             }
             ClientMessage::ClosePty { pty_id } => manager.close_pty(&pty_id).await,
+            ClientMessage::Upload { name, mime: _, size: _, data } => {
+                let bytes = decode_bytes(&data)?;
+                let path = format!("uploads/{name}");
+                if let Some(parent) = std::path::Path::new(&path).parent() {
+                    std::fs::create_dir_all(parent)
+                        .with_context(|| format!("failed to create upload dir: {path}"))?;
+                }
+                std::fs::write(&path, &bytes)
+                    .with_context(|| format!("failed to write upload: {path}"))?;
+                event_tx
+                    .send(ServerMessage::UploadAccepted {
+                        name: name.clone(),
+                        path: path.clone(),
+                    })
+                    .await
+                    .context("failed to send UploadAccepted")?;
+                info!("saved upload to {path} ({} bytes)", bytes.len());
+                Ok(())
+            }
             ClientMessage::Ping => event_tx
                 .send(ServerMessage::Pong)
                 .await

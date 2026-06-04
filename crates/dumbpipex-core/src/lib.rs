@@ -75,6 +75,12 @@ pub enum ClientMessage {
     PtyInput { pty_id: String, data: String },
     ResizePty { pty_id: String, cols: u16, rows: u16 },
     ClosePty { pty_id: String },
+    Upload {
+        name: String,
+        mime: String,
+        size: u64,
+        data: String,
+    },
     Ping,
 }
 
@@ -98,6 +104,14 @@ pub enum ServerMessage {
     /// and stop expecting live output for it.
     PtyDetached { pty_id: String, reason: String },
     Error { message: String },
+    UploadAccepted {
+        name: String,
+        path: String,
+    },
+    UploadError {
+        name: String,
+        message: String,
+    },
     Pong,
 }
 

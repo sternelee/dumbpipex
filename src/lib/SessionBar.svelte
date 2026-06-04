@@ -36,6 +36,16 @@
     return shell.split("/").pop() ?? shell;
   }
 
+  // Compact byte count for the tab's truncation badge / tooltip.
+  // Keeps to a single token so it does not push the tab layout.
+  function formatBytesShort(n: number): string {
+    if (!Number.isFinite(n) || n <= 0) return "0 B";
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KiB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MiB`;
+    return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GiB`;
+  }
+
   // 计算可见标签：按顺序累加宽度，超出则收起
   const visiblePtys = $derived.by(() => {
     if (ptys.length === 0) return [];
@@ -213,7 +223,7 @@
             aria-current={pty.pty_id === activePtyId ? "page" : undefined}
             use:observeTab={pty.pty_id}
             onclick={() => selectPty(pty.pty_id)}
-            title={`${pty.pty_id} · ${pty.shell}${pty.exited ? " · exited" : ""}`}
+            title={`${pty.pty_id} · ${pty.shell}${pty.exited ? " · exited" : ""}${(pty.bytes_dropped ?? 0) > 0 ? ` · lost ${formatBytesShort(pty.bytes_dropped ?? 0)}` : ""}`}
           >
             <span class="tab-glow"></span>
             <span class="tab-content">
@@ -226,6 +236,13 @@
                 >
               {/if}
             </span>
+            {#if (pty.bytes_dropped ?? 0) > 0}
+              <span
+                class="tab-truncated"
+                aria-label={`已丢失 ${pty.bytes_dropped} 字节输出`}
+                title="代理回放不完整：已丢失 {formatBytesShort(pty.bytes_dropped ?? 0)} 输出"
+              >⚠</span>
+            {/if}
             {#if pty.exited}
               <span class="tab-exit" aria-label="已退出">●</span>
             {/if}
@@ -436,6 +453,17 @@
     color: #ef4444;
     margin-left: 0.15rem;
     display: none;
+  }
+
+  .tab-truncated {
+    font-size: 0.7rem;
+    color: #fbbf24;
+    margin-left: 0.15rem;
+    line-height: 1;
+    /* Make the warning glyph feel subtle, not alarming: the
+       underlying issue (slow client / buffer trim) is a property
+       of the network, not the user's fault. */
+    filter: saturate(0.85);
   }
 
   .tab-close {
