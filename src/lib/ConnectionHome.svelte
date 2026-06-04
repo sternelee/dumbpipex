@@ -3,27 +3,27 @@
   import type { SessionPhase } from "$lib/terminal-ui";
 
   let {
-    ticket,
-    shell,
-    status,
-    sessionPhase,
-    busy,
-    viewerMode,
-    onTicketChange,
-    onShellChange,
-    onViewerModeChange,
-    onConnect,
+    ticket = "",
+    shell = "",
+    status = "",
+    sessionPhase = "idle" as SessionPhase,
+    busy = false,
+    viewerMode = false,
+    onTicketChange = (_value: string) => {},
+    onShellChange = (_value: string) => {},
+    onViewerModeChange = (_value: boolean) => {},
+    onConnect = () => {},
   }: {
-    ticket: string;
-    shell: string;
-    status: string;
-    sessionPhase: SessionPhase;
-    busy: boolean;
-    viewerMode: boolean;
-    onTicketChange: (value: string) => void;
-    onShellChange: (value: string) => void;
-    onViewerModeChange: (value: boolean) => void;
-    onConnect: () => void;
+    ticket?: string;
+    shell?: string;
+    status?: string;
+    sessionPhase?: SessionPhase;
+    busy?: boolean;
+    viewerMode?: boolean;
+    onTicketChange?: (value: string) => void;
+    onShellChange?: (value: string) => void;
+    onViewerModeChange?: (value: boolean) => void;
+    onConnect?: () => void;
   } = $props();
 
   let ticketEl = $state<HTMLTextAreaElement | null>(null);

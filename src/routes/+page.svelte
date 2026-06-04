@@ -954,8 +954,8 @@
       // honor it on read for back-compat, but on next save the
       // recovery state will no longer include it. `shell` carries
       // over the same way.
-      ticket = persisted.ticket;
-      shell = persisted.shell;
+      ticket = persisted.ticket ?? "";
+      shell = persisted.shell ?? "";
       autoReconnectEnabled = persisted.autoReconnect;
       for (const pty of persisted.ptys) {
         ptyModes.set(pty.pty_id, pty.mode);
@@ -1107,15 +1107,15 @@
       sessionPhase={sessionPhase}
       busy={isBusy()}
       viewerMode={viewerMode}
-      onTicketChange={(value) => {
+      onTicketChange={(value: string) => {
         ticket = value;
         writeRecoveryState();
       }}
-      onShellChange={(value) => {
+      onShellChange={(value: string) => {
         shell = value;
         writeRecoveryState();
       }}
-      onViewerModeChange={(value) => {
+      onViewerModeChange={(value: boolean) => {
         viewerMode = value;
       }}
       onConnect={() => void connect()}

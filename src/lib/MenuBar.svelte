@@ -55,7 +55,7 @@
   let openMenu = $state<MenuId>(null);
   let activeIndex = $state(0);
   let menuBarRef = $state<HTMLElement | null>(null);
-  let triggerRefs: Partial<Record<NonNullable<MenuId>, HTMLButtonElement>> = {};
+  let triggerRefs = $state<Partial<Record<NonNullable<MenuId>, HTMLButtonElement>>>({});
   let itemRefs = $state<(HTMLButtonElement | null)[]>([]);
 
   const MENU_ORDER: NonNullable<MenuId>[] = ["file", "view"];
