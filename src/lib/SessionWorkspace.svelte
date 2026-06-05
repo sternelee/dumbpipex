@@ -19,6 +19,7 @@
     ptys,
     activePtyId,
     busy,
+    readOnly = false,
     onDisconnect,
     onCreatePty,
     onCloseActivePty,
@@ -39,6 +40,7 @@
     ptys: PtySession[];
     activePtyId: string | null;
     busy: boolean;
+    readOnly?: boolean;
     onDisconnect: () => void;
     onCreatePty: () => void;
     onCloseActivePty: () => void;
@@ -428,6 +430,7 @@
     {showSearch}
     compact={compactLayout}
     {hasActivePty}
+    {readOnly}
     themes={terminalThemes}
     {themeId}
     onNewTab={onCreatePty}
@@ -450,7 +453,8 @@
       {activePtyId}
       {compactLayout}
       {keyboardOpen}
-      {busy}
+      busy={busy || readOnly}
+      {readOnly}
       {onSelectPty}
       {onCreatePty}
       {onCloseActivePty}
@@ -564,7 +568,7 @@
         {activeMode}
         {mobilePlatform}
         {hasActivePty}
-        {busy}
+        busy={busy || readOnly}
         {onSendShortcut}
         {onPaneNotice}
         {onPaneData}
@@ -581,7 +585,7 @@
         {#if showSearch}
           <SearchPanel bind:searchQuery {onSearch} onClose={closeMobilePanel} />
         {:else if showShortcuts}
-          <DesktopShortcuts {hasActivePty} {busy} {onSendShortcut} />
+          <DesktopShortcuts {hasActivePty} busy={busy || readOnly} {onSendShortcut} />
         {/if}
       </MobileSheet>
     {/if}

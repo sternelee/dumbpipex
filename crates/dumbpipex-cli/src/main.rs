@@ -8,17 +8,17 @@ use std::sync::{Arc, Mutex as StdMutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use clap::{ArgAction, Parser};
 use dumbpipex_core::{
-    ALPN, ClientMessage, ConnectTicket, PtySessionInfo, ServerMessage, decode_bytes, encode_bytes,
-    read_frame, write_frame,
+    decode_bytes, encode_bytes, read_frame, write_frame, ClientMessage, ConnectTicket,
+    PtySessionInfo, ServerMessage, ALPN,
 };
 use iroh::endpoint::presets;
-use iroh::{Endpoint, EndpointAddr, SecretKey, endpoint::Connection};
 use iroh::Watcher;
-use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
-use tokio::sync::{Mutex, mpsc};
+use iroh::{endpoint::Connection, Endpoint, EndpointAddr, SecretKey};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+use tokio::sync::{mpsc, Mutex};
 use tracing::{error, info, warn};
 
 const DETACHED_SESSION_TTL: Duration = Duration::from_secs(30 * 60);
@@ -65,9 +65,18 @@ struct PtyProcess {
 }
 
 enum PtyEvent {
-    Output { pty_id: String, data: String },
-    Exited { pty_id: String, exit_code: Option<i32> },
-    Error { pty_id: String, message: String },
+    Output {
+        pty_id: String,
+        data: String,
+    },
+    Exited {
+        pty_id: String,
+        exit_code: Option<i32>,
+    },
+    Error {
+        pty_id: String,
+        message: String,
+    },
 }
 
 #[derive(Clone)]
@@ -95,6 +104,7 @@ struct ManagedState {
     rows: u16,
     backlog: VecDeque<String>,
     backlog_bytes: usize,
+    bytes_dropped: u64,
     attached: Option<AttachedClient>,
     detached_at: Option<Instant>,
     /// True while we are replaying backlog to a freshly attached client.
@@ -128,6 +138,7 @@ struct PtyCreatedDispatch {
     rows: u16,
     resume_token: String,
     resumed: bool,
+    bytes_dropped: u64,
 }
 
 enum ResumeOutcome {
@@ -174,7 +185,10 @@ impl PtyProcess {
             .master
             .try_clone_reader()
             .context("failed to clone PTY reader")?;
-        let writer = pair.master.take_writer().context("failed to take PTY writer")?;
+        let writer = pair
+            .master
+            .take_writer()
+            .context("failed to take PTY writer")?;
 
         let child = Arc::new(StdMutex::new(child));
         let child_for_wait = child.clone();
@@ -305,6 +319,7 @@ impl ManagedSession {
                 rows,
                 backlog: VecDeque::new(),
                 backlog_bytes: 0,
+                bytes_dropped: 0,
                 attached: Some(AttachedClient { client_id, sender }),
                 detached_at: None,
                 resuming: false,
@@ -363,6 +378,7 @@ impl ManagedSession {
             cols: state.cols,
             rows: state.rows,
             resume_token: self.resume_token.clone(),
+            bytes_dropped: state.bytes_dropped,
         })
     }
 
@@ -407,10 +423,7 @@ impl ManagedSession {
 
         state.cols = cols;
         state.rows = rows;
-        state.attached = Some(AttachedClient {
-            client_id,
-            sender,
-        });
+        state.attached = Some(AttachedClient { client_id, sender });
         state.detached_at = None;
         // Mark that we are about to replay the backlog. Live output
         // events arriving during the replay are buffered in
@@ -427,6 +440,7 @@ impl ManagedSession {
                 rows,
                 resume_token: self.resume_token.clone(),
                 resumed: true,
+                bytes_dropped: state.bytes_dropped,
             },
             backlog: state.backlog.iter().cloned().collect(),
         })
@@ -541,7 +555,9 @@ impl SessionManager {
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
-                    PtyEvent::Output { pty_id, data } => manager_for_events.handle_output(pty_id, data).await,
+                    PtyEvent::Output { pty_id, data } => {
+                        manager_for_events.handle_output(pty_id, data).await
+                    }
                     PtyEvent::Exited { pty_id, exit_code } => {
                         manager_for_events.handle_exit(pty_id, exit_code).await
                     }
@@ -571,7 +587,10 @@ impl SessionManager {
         sender: mpsc::Sender<ServerMessage>,
     ) -> Result<()> {
         let shell_name = shell.unwrap_or_else(|| self.inner.default_shell.clone());
-        let pty_id = format!("pty-{}", self.inner.next_pty_id.fetch_add(1, Ordering::Relaxed));
+        let pty_id = format!(
+            "pty-{}",
+            self.inner.next_pty_id.fetch_add(1, Ordering::Relaxed)
+        );
         let resume_token = encode_bytes(&rand::random::<[u8; 16]>());
         let process = PtyProcess::spawn(
             shell_name.clone(),
@@ -606,20 +625,14 @@ impl SessionManager {
                 rows,
                 resume_token,
                 resumed: false,
+                bytes_dropped: 0,
             },
         )
         .await
     }
 
     async fn list_ptys(&self) -> Vec<PtySessionInfo> {
-        let sessions: Vec<_> = self
-            .inner
-            .sessions
-            .lock()
-            .await
-            .values()
-            .cloned()
-            .collect();
+        let sessions: Vec<_> = self.inner.sessions.lock().await.values().cloned().collect();
         let mut items = Vec::new();
         for session in sessions {
             if let Some(info) = session.list_info().await {
@@ -674,6 +687,7 @@ impl SessionManager {
                 rows: created.rows,
                 resume_token: created.resume_token,
                 resumed: created.resumed,
+                bytes_dropped: created.bytes_dropped,
             },
         )
         .await
@@ -777,27 +791,14 @@ impl SessionManager {
     }
 
     async fn detach_client_sessions(&self, client_id: &str) {
-        let sessions: Vec<_> = self
-            .inner
-            .sessions
-            .lock()
-            .await
-            .values()
-            .cloned()
-            .collect();
+        let sessions: Vec<_> = self.inner.sessions.lock().await.values().cloned().collect();
         for session in sessions {
             session.detach_if_client(client_id).await;
         }
     }
 
     async fn handle_output(&self, pty_id: String, data: String) {
-        let session = self
-            .inner
-            .sessions
-            .lock()
-            .await
-            .get(&pty_id)
-            .cloned();
+        let session = self.inner.sessions.lock().await.get(&pty_id).cloned();
         let Some(session) = session else {
             return;
         };
@@ -828,13 +829,7 @@ impl SessionManager {
     }
 
     async fn handle_exit(&self, pty_id: String, exit_code: Option<i32>) {
-        let session = self
-            .inner
-            .sessions
-            .lock()
-            .await
-            .get(&pty_id)
-            .cloned();
+        let session = self.inner.sessions.lock().await.get(&pty_id).cloned();
         let Some(session) = session else {
             return;
         };
@@ -867,13 +862,7 @@ impl SessionManager {
     }
 
     async fn handle_error(&self, pty_id: String, message: String) {
-        let session = self
-            .inner
-            .sessions
-            .lock()
-            .await
-            .get(&pty_id)
-            .cloned();
+        let session = self.inner.sessions.lock().await.get(&pty_id).cloned();
         let Some(session) = session else {
             return;
         };
@@ -928,9 +917,123 @@ fn push_backlog(state: &mut ManagedState, data: String) {
     while state.backlog_bytes > BACKLOG_LIMIT_BYTES {
         if let Some(chunk) = state.backlog.pop_front() {
             state.backlog_bytes = state.backlog_bytes.saturating_sub(chunk.len());
+            state.bytes_dropped = state.bytes_dropped.saturating_add(chunk.len() as u64);
         } else {
             break;
         }
+    }
+}
+
+fn sanitize_upload_name(name: &str) -> Result<String> {
+    let leaf = name
+        .rsplit(|ch| ch == '/' || ch == '\\')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if leaf.is_empty() || leaf == "." || leaf == ".." {
+        return Err(anyhow!("upload filename is empty or unsafe"));
+    }
+
+    let mut safe = String::with_capacity(leaf.len());
+    for ch in leaf.chars() {
+        match ch {
+            'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '-' | '_' => safe.push(ch),
+            ch if ch.is_whitespace() => safe.push('_'),
+            _ => safe.push('_'),
+        }
+    }
+
+    if safe
+        .trim_matches(|ch| ch == '.' || ch == '-' || ch == '_')
+        .is_empty()
+    {
+        return Err(anyhow!("upload filename has no safe characters"));
+    }
+
+    Ok(safe)
+}
+
+fn save_upload(name: &str, bytes: &[u8]) -> Result<String> {
+    let upload_dir = Path::new("uploads");
+    fs::create_dir_all(upload_dir)
+        .with_context(|| format!("failed to create upload dir: {}", upload_dir.display()))?;
+
+    let upload_root = upload_dir
+        .canonicalize()
+        .with_context(|| format!("failed to resolve upload dir: {}", upload_dir.display()))?;
+    let path = upload_root.join(name);
+    let parent = path
+        .parent()
+        .context("upload destination has no parent directory")?
+        .canonicalize()
+        .context("failed to resolve upload destination parent")?;
+    if parent != upload_root {
+        return Err(anyhow!("upload destination escaped upload directory"));
+    }
+
+    fs::write(&path, bytes)
+        .with_context(|| format!("failed to write upload: {}", path.display()))?;
+    Ok(upload_dir.join(name).to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn managed_state_for_test() -> ManagedState {
+        ManagedState {
+            cols: 80,
+            rows: 24,
+            backlog: VecDeque::new(),
+            backlog_bytes: 0,
+            bytes_dropped: 0,
+            attached: None,
+            detached_at: None,
+            resuming: false,
+            resume_buffer: Vec::new(),
+            exited: false,
+            exit_code: None,
+        }
+    }
+
+    #[test]
+    fn sanitize_upload_name_keeps_only_safe_leaf_name() {
+        assert_eq!(
+            sanitize_upload_name("../nested/report final.txt").expect("sanitize"),
+            "report_final.txt"
+        );
+        assert_eq!(
+            sanitize_upload_name(r"C:\Users\me\payload.sh").expect("sanitize"),
+            "payload.sh"
+        );
+        assert_eq!(
+            sanitize_upload_name("unsafe name #1.bin").expect("sanitize"),
+            "unsafe_name__1.bin"
+        );
+    }
+
+    #[test]
+    fn sanitize_upload_name_rejects_empty_or_meaningless_names() {
+        assert!(sanitize_upload_name("").is_err());
+        assert!(sanitize_upload_name("../").is_err());
+        assert!(sanitize_upload_name("..").is_err());
+        assert!(sanitize_upload_name("////").is_err());
+    }
+
+    #[test]
+    fn push_backlog_tracks_trimmed_bytes() {
+        let mut state = managed_state_for_test();
+        let first = "a".repeat(BACKLOG_LIMIT_BYTES);
+        let second = "b".repeat(1);
+
+        push_backlog(&mut state, first);
+        assert_eq!(state.bytes_dropped, 0);
+        assert_eq!(state.backlog_bytes, BACKLOG_LIMIT_BYTES);
+
+        push_backlog(&mut state, second);
+        assert!(state.backlog_bytes <= BACKLOG_LIMIT_BYTES);
+        assert_eq!(state.bytes_dropped, BACKLOG_LIMIT_BYTES as u64);
+        assert_eq!(state.backlog.len(), 1);
     }
 }
 
@@ -987,7 +1090,11 @@ async fn main() -> Result<()> {
     serve_endpoint(endpoint, manager, args.name).await
 }
 
-async fn serve_endpoint(endpoint: Endpoint, manager: SessionManager, agent_name: String) -> Result<()> {
+async fn serve_endpoint(
+    endpoint: Endpoint,
+    manager: SessionManager,
+    agent_name: String,
+) -> Result<()> {
     loop {
         let Some(connecting) = endpoint.accept().await else {
             break;
@@ -1224,9 +1331,8 @@ fn process_missing_error(_err: &anyhow::Error) -> bool {
 
 fn spawn_demand_child(args: &Args, shell: &str, secret: &str) -> Result<(ConnectTicket, u32)> {
     let ticket_path = demand_ticket_path();
-    let mut command = Command::new(
-        std::env::current_exe().context("failed to locate dumbpipex-cli executable")?,
-    );
+    let mut command =
+        Command::new(std::env::current_exe().context("failed to locate dumbpipex-cli executable")?);
     command
         .arg("--name")
         .arg(&args.name)
@@ -1264,7 +1370,9 @@ fn spawn_demand_child(args: &Args, shell: &str, secret: &str) -> Result<(Connect
         command.creation_flags(CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS);
     }
 
-    let mut child = command.spawn().context("failed to launch background agent")?;
+    let mut child = command
+        .spawn()
+        .context("failed to launch background agent")?;
     let ticket = wait_for_ticket(&ticket_path, &mut child)?;
     Ok((ticket, child.id()))
 }
@@ -1274,7 +1382,10 @@ fn demand_ticket_path() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_nanos();
-    std::env::temp_dir().join(format!("dumbpipex-ticket-{}-{suffix}.txt", std::process::id()))
+    std::env::temp_dir().join(format!(
+        "dumbpipex-ticket-{}-{suffix}.txt",
+        std::process::id()
+    ))
 }
 
 fn wait_for_ticket(path: &Path, child: &mut std::process::Child) -> Result<ConnectTicket> {
@@ -1283,7 +1394,10 @@ fn wait_for_ticket(path: &Path, child: &mut std::process::Child) -> Result<Conne
     loop {
         if let Ok(raw) = fs::read_to_string(path) {
             let _ = fs::remove_file(path);
-            return raw.trim().parse().context("failed to parse background ticket");
+            return raw
+                .trim()
+                .parse()
+                .context("failed to parse background ticket");
         }
 
         if let Some(status) = child
@@ -1291,7 +1405,9 @@ fn wait_for_ticket(path: &Path, child: &mut std::process::Child) -> Result<Conne
             .context("failed to inspect background agent state")?
         {
             let _ = fs::remove_file(path);
-            return Err(anyhow!("background agent exited before publishing ticket: {status}"));
+            return Err(anyhow!(
+                "background agent exited before publishing ticket: {status}"
+            ));
         }
 
         if Instant::now() >= deadline {
@@ -1310,13 +1426,13 @@ fn wait_for_ticket(path: &Path, child: &mut std::process::Child) -> Result<Conne
 fn install_shutdown_hook(manager: SessionManager) {
     #[cfg(unix)]
     {
-        use tokio::signal::unix::{SignalKind, signal};
+        use tokio::signal::unix::{signal, SignalKind};
         let mgr = manager.clone();
         tokio::spawn(async move {
-            let mut term = signal(SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
-            let mut intr = signal(SignalKind::interrupt())
-                .expect("failed to install SIGINT handler");
+            let mut term =
+                signal(SignalKind::terminate()).expect("failed to install SIGTERM handler");
+            let mut intr =
+                signal(SignalKind::interrupt()).expect("failed to install SIGINT handler");
             tokio::select! {
                 _ = term.recv() => info!("received SIGTERM, tearing down PTYs"),
                 _ = intr.recv() => info!("received SIGINT, tearing down PTYs"),
@@ -1355,7 +1471,8 @@ impl Drop for SessionManagerInner {
         for session in sessions {
             if let Ok(mut proc_guard) = session.process.lock() {
                 if let Some(proc) = proc_guard.take() {
-                    proc.shutting_down.store(true, std::sync::atomic::Ordering::Relaxed);
+                    proc.shutting_down
+                        .store(true, std::sync::atomic::Ordering::Relaxed);
                     if let Ok(mut child) = proc.child.lock() {
                         let _ = child.kill();
                     }
@@ -1447,7 +1564,14 @@ async fn handle_connection(
                 rows,
             } => {
                 manager
-                    .resume_pty(pty_id, resume_token, cols, rows, client_id.clone(), event_tx.clone())
+                    .resume_pty(
+                        pty_id,
+                        resume_token,
+                        cols,
+                        rows,
+                        client_id.clone(),
+                        event_tx.clone(),
+                    )
                     .await
             }
             ClientMessage::PtyInput { pty_id, data } => {
@@ -1458,27 +1582,27 @@ async fn handle_connection(
                 manager.resize_pty(&pty_id, cols, rows).await
             }
             ClientMessage::ClosePty { pty_id } => manager.close_pty(&pty_id).await,
-            ClientMessage::Upload { name, mime: _, size: _, data } => {
+            ClientMessage::Upload {
+                name,
+                mime: _,
+                size: _,
+                data,
+            } => {
                 let bytes = decode_bytes(&data)?;
-                let path = format!("uploads/{name}");
-                if let Some(parent) = std::path::Path::new(&path).parent() {
-                    std::fs::create_dir_all(parent)
-                        .with_context(|| format!("failed to create upload dir: {path}"))?;
-                }
-                std::fs::write(&path, &bytes)
-                    .with_context(|| format!("failed to write upload: {path}"))?;
+                let safe_name = sanitize_upload_name(&name)?;
+                let display_path = save_upload(&safe_name, &bytes)?;
                 event_tx
                     .send(ServerMessage::UploadAccepted {
-                        name: name.clone(),
-                        path: path.clone(),
+                        name: safe_name,
+                        path: display_path.clone(),
                     })
                     .await
                     .context("failed to send UploadAccepted")?;
-                info!("saved upload to {path} ({} bytes)", bytes.len());
+                info!("saved upload to {display_path} ({} bytes)", bytes.len());
                 Ok(())
             }
-            ClientMessage::Ping => event_tx
-                .send(ServerMessage::Pong)
+            ClientMessage::Ping { nonce } => event_tx
+                .send(ServerMessage::Pong { nonce })
                 .await
                 .context("failed to queue pong"),
         };

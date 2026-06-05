@@ -1,11 +1,8 @@
 import type { RemotePtyTheme } from "$lib/remote-pty-types";
 
-// Wire protocol limits. MUST stay in sync with `MAX_INPUT_BYTES` /
-// `MAX_INPUT_CHUNK_BYTES` in `crates/dumbpipex-core/src/lib.rs`.
-// These are duplicated here rather than fetched via Tauri IPC
-// because they are referenced on the input hot path and a single
-// keystroke must not be blocked on an IPC round-trip.
-export const MAX_INPUT_BYTES = 64 * 1024;
+// Frontend chunking keeps large paste/input operations responsive across the
+// Tauri IPC boundary. This is not a protocol size limit; the app does not
+// impose a max input size.
 export const MAX_INPUT_CHUNK_BYTES = 16 * 1024;
 
 export type RemoteEvent =

@@ -7,6 +7,7 @@
     compactLayout,
     keyboardOpen = false,
     busy,
+    readOnly = false,
     onSelectPty,
     onCreatePty,
     onCloseActivePty,
@@ -16,6 +17,7 @@
     compactLayout: boolean;
     keyboardOpen?: boolean;
     busy: boolean;
+    readOnly?: boolean;
     onSelectPty: (ptyId: string) => void;
     onCreatePty: () => void;
     onCloseActivePty: () => void;
@@ -255,7 +257,7 @@
               onpointerdown={(e) => e.stopPropagation()}
               onclick={(e) => {
                 e.stopPropagation();
-                if (busy) return;
+                if (busy || readOnly) return;
                 if (pty.pty_id === activePtyId) {
                   onCloseActivePty();
                 } else {
@@ -267,7 +269,7 @@
                 if (e.key !== "Enter" && e.key !== " ") return;
                 e.preventDefault();
                 e.stopPropagation();
-                if (busy) return;
+                if (busy || readOnly) return;
                 if (pty.pty_id !== activePtyId) onSelectPty(pty.pty_id);
                 onCloseActivePty();
               }}>×</span
@@ -329,7 +331,7 @@
       <button
         class="tab-action-btn"
         onclick={onCreatePty}
-        disabled={busy}
+        disabled={busy || readOnly}
         title="新建 PTY (⌘T)"
       >
         <span class="tab-action-icon">＋</span>
@@ -337,7 +339,7 @@
       <button
         class="tab-action-btn close-btn"
         onclick={onCloseActivePty}
-        disabled={!hasActivePty() || busy}
+        disabled={!hasActivePty() || busy || readOnly}
         title="关闭 (⌘W)"
       >
         <span class="tab-action-icon">✕</span>

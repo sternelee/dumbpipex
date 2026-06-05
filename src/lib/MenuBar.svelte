@@ -15,6 +15,7 @@
     showSearch,
     compact = false,
     hasActivePty,
+    readOnly = false,
     themes,
     themeId,
     onNewTab,
@@ -36,6 +37,7 @@
     showSearch: boolean;
     compact?: boolean;
     hasActivePty: boolean;
+    readOnly?: boolean;
     themes: TerminalThemeOption[];
     themeId: string;
     onNewTab: () => void;
@@ -69,15 +71,15 @@
   function getMenuItems(id: MenuId): MenuItem[] {
     if (id === "file") {
       const items: MenuItem[] = [
-        { kind: "action", label: "New Tab", shortcut: "⌘T", action: onNewTab },
-        { kind: "action", label: "Close Tab", shortcut: "⌘W", action: onCloseTab, disabled: !hasActivePty },
+        { kind: "action", label: "New Tab", shortcut: "⌘T", action: onNewTab, disabled: readOnly },
+        { kind: "action", label: "Close Tab", shortcut: "⌘W", action: onCloseTab, disabled: !hasActivePty || readOnly },
         { kind: "separator" },
       ];
       if (splitActive) {
-        items.push({ kind: "action", label: "Close Split", action: onCloseSplit! });
+        items.push({ kind: "action", label: "Close Split", action: onCloseSplit!, disabled: readOnly });
       } else {
-        items.push({ kind: "action", label: "Split Right", action: onSplitRight });
-        items.push({ kind: "action", label: "Split Left", action: onSplitLeft });
+        items.push({ kind: "action", label: "Split Right", action: onSplitRight, disabled: readOnly });
+        items.push({ kind: "action", label: "Split Left", action: onSplitLeft, disabled: readOnly });
       }
       items.push({ kind: "separator" });
       items.push({ kind: "action", label: "Disconnect", action: onDisconnect });
@@ -549,4 +551,3 @@
     background: rgba(148, 163, 184, 0.15);
   }
 </style>
-

@@ -180,6 +180,7 @@
   function handleModifierPointerEnd() { stopModifierLockTimer(); }
 
   function handleModifierClick(modifier: StickyModifier) {
+    if (!hasActivePty || busy) return;
     if (modifierLongPressed === modifier) { modifierLongPressed = null; stopModifierLockTimer(); return; }
     modifierLongPressed = null;
     stopModifierLockTimer();
@@ -285,6 +286,7 @@
         onpointercancel={handleModifierPointerEnd}
         onpointerleave={handleModifierPointerEnd}
         onclick={() => handleModifierClick(mod)}
+        disabled={!hasActivePty || busy}
       >
         {modifierLabel(mod)}
       </button>

@@ -4,12 +4,26 @@
 
 Code-backed audit of the current Tauri + SvelteKit app in this repo, focused on why it is likely to read as "web-y" on macOS and what to fix first. This is a source audit, not a screenshot/recording-based visual QA pass.
 
+## 2026-06-05 refresh
+
+This document predates later mobile and web-shell work. The current repo now
+contains generated iOS/Android platform directories under `src-tauri/gen/`, and
+`docs/mobile-gen-regeneration.md` records manual generated-platform tweaks. A
+Svelte `MenuBar` component also exists.
+
+Those updates do not change the core macOS conclusion: the app still lacks
+native Tauri/macOS menu wiring, window/titlebar/material decisions, and
+shell-level shortcut behavior. Treat the older "no mobile files found" wording
+below as superseded by this refresh.
+
 ## Repo profile
 
 - Frontend: SvelteKit SPA (`src/routes/+page.svelte`, `src/lib/*.svelte`)
 - Shell: Tauri v2 (`src-tauri/tauri.conf.json`, `src-tauri/src/lib.rs`)
 - Primary surface: remote terminal workspace with connection screen + PTY tabs
-- Mobile status: only a generic mobile entry point exists; no iOS/Android-specific UI/native code was found
+- Mobile status: generated iOS/Android projects exist under `src-tauri/gen/`,
+  but mobile-native behavior remains mostly WebView/responsive UI plus manual
+  platform tweaks.
 
 ## Executive summary
 
@@ -20,7 +34,9 @@ The biggest reasons are:
 1. **Default shell/window setup** — no visible native window customization, menu, material, titlebar, or macOS-specific behavior.
 2. **Strong web visual language** — gradient page background, rounded cards, CSS shadows, pill chips, and a branded web-app control style.
 3. **Web interaction cues** — `cursor: pointer` on buttons, browser-style clipboard/open-link behavior, and no evidence of standard Mac command shortcuts.
-4. **Mobile is only responsive, not native** — compact layout and shortcut buttons exist, but there is no platform-native mobile shell/UI strategy.
+4. **Mobile is platform-generated but still not product-native** — generated
+   iOS/Android shells and manual platform tweaks exist, but the primary
+   terminal interaction model is still mostly WebView/responsive UI.
 
 If the goal is "passes as a real Mac app," the current UI should be treated as a **good functional prototype** rather than a finished native-feel shell.
 
@@ -55,6 +71,8 @@ This strongly suggests the app is running in a mostly stock Tauri shell. That is
   - `tauri::Builder::default()`
   - `.plugin(tauri_plugin_opener::init())`
   - `.invoke_handler(...)`
+- `src/lib/MenuBar.svelte` provides a web-rendered menu bar, not a native
+  macOS app menu.
 - No evidence in Rust bootstrap of:
   - native menu creation
   - window appearance customization
@@ -126,17 +144,21 @@ Mac-native feel is often more about keyboard/menu behavior than visuals. Right n
 **Impact**
 These are acceptable for a prototype, but they reinforce the feeling that the WebView is in charge. For a more native-feel shell, clipboard/open-link handling should be intentionally mediated through the host where needed.
 
-### 8) Mobile support is only partial/responsive
+### 8) Mobile support is generated and responsive, not yet native
 
 **Evidence**
 
 - `src-tauri/src/lib.rs:302` has `#[cfg_attr(mobile, tauri::mobile_entry_point)]`
 - `src/lib/SessionWorkspace.svelte` includes `compactLayout` behavior and mobile shortcut rows
 - `src/lib/RemotePtyPane.svelte:144-148` adds long-press copy for non-mouse pointers
-- No iOS/Android native project files were found under `src-tauri`
+- Generated native projects exist under `src-tauri/gen/android` and
+  `src-tauri/gen/apple`
+- `docs/mobile-gen-regeneration.md` records manual generated-platform tweaks
 
 **Impact**
-This codebase is _mobile-aware_, but not yet _mobile-native_. Responsive adaptation alone will not produce a good mobile terminal experience.
+This codebase is _mobile-aware_ and has generated mobile shells, but it is not
+yet _mobile-native_. Responsive adaptation plus generated project files alone
+will not produce a good mobile terminal experience.
 
 ---
 

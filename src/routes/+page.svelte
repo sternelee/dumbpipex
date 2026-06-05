@@ -25,24 +25,26 @@
 
   type PersistedRecoveryState = {
     version: 1 | 2;
-    ticket: string;
-    shell: string;
+    ticket?: string;
+    shell?: string;
     autoReconnect: boolean;
+    viewerMode?: boolean;
     ptys: PersistedPtyState[];
   };
 
   // The on-disk recovery state for `localStorage` is intentionally
   // **non-sensitive**: it holds the autoReconnect preference and the
-  // per-PTY mode map. The ticket itself lives in a Tauri-managed file
-  // under `app_data_dir/ticket.json` (mode 0600 on Unix), written via
-  // the `save_ticket` / `load_ticket` / `clear_ticket` commands. This
-  // means a WebView XSS can flip a switch but cannot exfiltrate the
-  // agent credential from localStorage. `ticket` and `shell` are still
-  // part of the in-memory shape because they come back from the legacy
-  // v1 store; on write we emit them as empty strings.
+  // viewer flag plus per-PTY mode map. The ticket itself lives in a
+  // Tauri-managed file under `app_data_dir/ticket.json` (mode 0600 on
+  // Unix), written via the `save_ticket` / `load_ticket` /
+  // `clear_ticket` commands. This means a WebView XSS can flip a
+  // switch but cannot exfiltrate the agent credential from localStorage.
+  // `ticket` and `shell` are still part of the in-memory shape because
+  // they come back from the legacy v1 store; on write we omit them.
   type PersistedNonSecretState = {
     version: 1 | 2;
     autoReconnect: boolean;
+    viewerMode: boolean;
     ptys: PersistedPtyState[];
   };
 
@@ -176,6 +178,7 @@
     const persisted: PersistedNonSecretState = {
       version: STORAGE_VERSION,
       autoReconnect: autoReconnectEnabled,
+      viewerMode,
       ptys: ptys
         .filter((pty) => !pty.exited)
         .map((pty) => ({
@@ -489,12 +492,11 @@
   async function sendRemoteInput(data: string) {
     const pty = getWritableActivePty();
     if (!pty) return;
+    if (!ensureWritable("发送输入")) return;
     trackInputMode(pty.pty_id, data);
-    // The agent rejects any single `PtyInput` payload larger than
-    // `MAX_INPUT_BYTES`. Chunk at `MAX_INPUT_CHUNK_BYTES` boundaries
-    // on the UTF-16 string so we never split a surrogate pair in
-    // the middle. For a single keystroke this loop runs once and is
-    // a no-op.
+    // Chunk large paste/input operations at `MAX_INPUT_CHUNK_BYTES`
+    // boundaries so IPC encoding stays responsive. For a single
+    // keystroke this loop runs once and is a no-op.
     const bytes = encoder.encode(data);
     for (let offset = 0; offset < bytes.length; offset += MAX_INPUT_CHUNK_BYTES) {
       const end = Math.min(offset + MAX_INPUT_CHUNK_BYTES, bytes.length);
@@ -539,6 +541,14 @@
     toast(message, "info", 2200);
   }
 
+  function ensureWritable(action: string) {
+    if (!viewerMode) return true;
+    const message = `只读连接不能${action}`;
+    status = message;
+    toast(message, "warning", 3200);
+    return false;
+  }
+
   async function connect(isAutoReconnect = false) {
     if (!ticket.trim() || isBusy()) return;
     cancelReconnect();
@@ -571,8 +581,11 @@
       writeRecoveryState();
       startKeepalive();
       const resumed = await resumeExistingSessions(result.sessions);
-      if (!resumed) {
+      if (!resumed && !viewerMode) {
         void createRemotePty();
+      } else if (!resumed) {
+        status = "只读连接已建立，但没有可恢复的 PTY";
+        toast(status, "warning", 5000);
       }
       toast(`已连接 ${result.agent_name}`, "success", 2400);
     } catch (error) {
@@ -635,6 +648,7 @@
 
   async function createRemotePty() {
     if (!connected || isBusy()) return;
+    if (!ensureWritable("创建新 PTY")) return;
     sessionPhase = "creating_pty";
     status = `正在创建第 ${ptys.length + 1} 个远程终端...`;
     try {
@@ -655,6 +669,7 @@
 
   async function uploadFile(file: File) {
     if (!connected || isBusy()) return;
+    if (!ensureWritable("上传文件")) return;
     const reader = new FileReader();
     reader.readAsDataURL(file);
     await new Promise<void>((resolve) => {
@@ -678,6 +693,7 @@
 
     const pty = getPty(ptyId);
     if (!connected || !pty || pty.exited || isBusy()) return;
+    if (viewerMode) return;
 
     try {
       await invoke("resize_pty", {
@@ -692,6 +708,7 @@
 
   async function closeRemotePty(ptyId = activePtyId) {
     if (!ptyId || isBusy()) return;
+    if (!ensureWritable("关闭 PTY")) return;
     const pty = getPty(ptyId);
     if (pty?.exited) {
       // Already exited — remove immediately. No PtyExited event
@@ -957,6 +974,7 @@
       ticket = persisted.ticket ?? "";
       shell = persisted.shell ?? "";
       autoReconnectEnabled = persisted.autoReconnect;
+      viewerMode = persisted.viewerMode ?? false;
       for (const pty of persisted.ptys) {
         ptyModes.set(pty.pty_id, pty.mode);
       }
@@ -1056,7 +1074,7 @@
   style="display:none"
   onchange={(e) => {
     const file = e.currentTarget.files?.[0];
-    if (file) uploadFile(file);
+    if (file) void uploadFile(file);
     e.currentTarget.value = "";
   }}
 />
@@ -1066,13 +1084,14 @@
   ondrop={(e) => {
     e.preventDefault();
     const file = e.dataTransfer?.files[0];
-    if (file && connected) uploadFile(file);
+    if (file && connected) void uploadFile(file);
   }}
 >
   <button
     class="upload-btn"
     onclick={() => document.getElementById("file-upload")?.click()}
-    title="上传文件"
+    disabled={!connected || isBusy() || viewerMode}
+    title={viewerMode ? "只读连接不能上传文件" : "上传文件"}
   >
     📎
   </button>
@@ -1086,6 +1105,7 @@
       ptys={ptys}
       activePtyId={activePtyId}
       busy={isBusy()}
+      readOnly={viewerMode}
       onDisconnect={() => void disconnect()}
       onCreatePty={() => void createRemotePty()}
       onCloseActivePty={() => void closeRemotePty()}
@@ -1117,6 +1137,7 @@
       }}
       onViewerModeChange={(value: boolean) => {
         viewerMode = value;
+        writeRecoveryState();
       }}
       onConnect={() => void connect()}
     />
