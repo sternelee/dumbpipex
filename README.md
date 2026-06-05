@@ -61,7 +61,7 @@ The agent prints a **ticket**. Paste that ticket into the Tauri app to connect.
 Install frontend dependencies once:
 
 ```bash
-npm install
+pnpm install
 ```
 
 Then start the app:
@@ -104,7 +104,17 @@ The app UI now exposes explicit session phases (`idle`, `connecting`, `creating_
 npm run check
 npm run build
 cargo check --workspace
+cargo test --workspace
 ```
+
+## Current audit status
+
+The latest source-backed audit is in
+[`docs/project-audit-2026-06-05.md`](docs/project-audit-2026-06-05.md).
+The follow-up fix pass resolved the protocol/IPC drift, ticket persistence,
+viewer-mode enforcement, upload path hardening, `bytes_dropped` telemetry, and
+the disabled CSP baseline. Remaining high-value work is broader behavioral
+testing plus the larger deferred features in `docs/future-work.md`.
 
 ## Current scope
 

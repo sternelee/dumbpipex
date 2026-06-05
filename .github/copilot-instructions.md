@@ -4,11 +4,11 @@
 
 | Task | Command |
 | --- | --- |
-| Frontend dev server | `npm run dev` |
-| Frontend production build | `npm run build` |
-| SvelteKit/TypeScript check | `npm run check` |
-| Tauri desktop dev | `npm run tauri dev` |
-| Tauri desktop build | `npm run tauri build` |
+| Frontend dev server | `pnpm dev` |
+| Frontend production build | `pnpm build` |
+| SvelteKit/TypeScript check | `pnpm check` |
+| Tauri desktop dev | `pnpm tauri dev` |
+| Tauri desktop build | `pnpm tauri build` |
 | Rust compile check | `cargo check --manifest-path src-tauri/Cargo.toml` |
 | Rust test suite | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | Single Rust test | `cargo test --manifest-path src-tauri/Cargo.toml <test_name>` |
@@ -25,5 +25,5 @@
 
 - Use Svelte 5 rune-style local state in components (`$state(...)`), matching `src/routes/+page.svelte`.
 - Preserve the static-SPA assumption when changing SvelteKit code. Server-only features or SSR-dependent patterns will not work without reworking the current Tauri packaging setup.
-- Keep Node package-manager commands aligned across files. `package.json` defines npm scripts, but `src-tauri/tauri.conf.json` still uses `pnpm dev` and `pnpm build` for `beforeDevCommand` and `beforeBuildCommand`; if you change one side, update the other.
+- Keep Node package-manager commands aligned across files. Both `package.json` and `src-tauri/tauri.conf.json` are now aligned to pnpm. If you change one side, update the other.
 - Static assets are served from `static/` and referenced with root-relative URLs in Svelte components.
