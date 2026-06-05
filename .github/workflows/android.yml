@@ -106,7 +106,7 @@ jobs:
 
       - name: Build Android APK
         if: steps.check-secrets.outputs.has_android_secrets == 'true'
-        run: pnpm tauri android build -- --config src-tauri/tauri.conf.json --target aarch64 armv7 i686 --apk --aab --split-per-abi
+        run: pnpm tauri android build --config src-tauri/tauri.conf.json --target aarch64 armv7 i686 --apk --aab --split-per-abi
 
       - name: Prepare Android ABI artifacts
         if: steps.check-secrets.outputs.has_android_secrets == 'true'
