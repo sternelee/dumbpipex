@@ -9,9 +9,10 @@ use std::time::Duration;
 use anyhow::{anyhow, Context, Result};
 use dumbpipex_core::{
     read_frame, write_frame, ClientMessage, ConnectTicket, PtySessionInfo, ServerMessage, ALPN,
+    DEFAULT_RELAY_URL,
 };
 use iroh::endpoint::{presets, Connection};
-use iroh::Endpoint;
+use iroh::{Endpoint, SecretKey};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::{mpsc, Mutex};
@@ -101,6 +102,20 @@ async fn connect_ticket(
     ticket: String,
     viewer: Option<bool>,
 ) -> Result<ConnectTicketResponse, String> {
+    tokio::time::timeout(
+        Duration::from_secs(75),
+        connect_ticket_inner(app, state, ticket, viewer),
+    )
+    .await
+    .map_err(|_| "connect_ticket timed out after 75s".to_string())?
+}
+
+async fn connect_ticket_inner(
+    app: AppHandle,
+    state: State<'_, RemoteManager>,
+    ticket: String,
+    viewer: Option<bool>,
+) -> Result<ConnectTicketResponse, String> {
     disconnect_inner(&state.inner)
         .await
         .map_err(err_to_string)?;
@@ -109,11 +124,21 @@ async fn connect_ticket(
     let read_only = viewer.unwrap_or(false);
 
     info!("binding iroh endpoint...");
-    let endpoint = tokio::time::timeout(Duration::from_secs(10), Endpoint::bind(presets::N0))
-        .await
-        .map_err(|_| "iroh endpoint bind timed out after 10s".to_string())?
-        .context("failed to bind local iroh endpoint")
-        .map_err(err_to_string)?;
+    let secret_key = SecretKey::generate();
+    let relay_url: iroh::RelayUrl = DEFAULT_RELAY_URL.parse().map_err(err_to_string)?;
+    let relay_map =
+        iroh::RelayMap::from(relay_url).with_auth_token(secret_key.public().to_string());
+    let endpoint = tokio::time::timeout(
+        Duration::from_secs(10),
+        Endpoint::builder(presets::N0)
+            .secret_key(secret_key)
+            .relay_mode(iroh::RelayMode::Custom(relay_map))
+            .bind(),
+    )
+    .await
+    .map_err(|_| "iroh endpoint bind timed out after 10s".to_string())?
+    .context("failed to bind local iroh endpoint")
+    .map_err(err_to_string)?;
     info!("endpoint bound, waiting for online...");
 
     tokio::time::timeout(Duration::from_secs(15), endpoint.online())
@@ -125,11 +150,14 @@ async fn connect_ticket(
         "connecting to remote agent at {:?}...",
         ticket.endpoint_addr
     );
-    let connection = endpoint
-        .connect(ticket.endpoint_addr.clone(), ALPN)
-        .await
-        .context("failed to connect to remote agent")
-        .map_err(err_to_string)?;
+    let connection = tokio::time::timeout(
+        Duration::from_secs(20),
+        endpoint.connect(ticket.endpoint_addr.clone(), ALPN),
+    )
+    .await
+    .map_err(|_| "iroh connect timed out after 20s".to_string())?
+    .context("failed to connect to remote agent")
+    .map_err(err_to_string)?;
     info!("connection established");
     let (mut send, mut recv) = connection
         .open_bi()

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub const ALPN: &[u8] = b"dumbpipex-terminal-v1";
+pub const DEFAULT_RELAY_URL: &str = "https://relay.leeapp.dev";
 pub const MAX_INPUT_CHUNK_BYTES: usize = 16 * 1024;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

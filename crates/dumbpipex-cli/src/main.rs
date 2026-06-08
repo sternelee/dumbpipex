@@ -12,7 +12,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::{ArgAction, Parser};
 use dumbpipex_core::{
     decode_bytes, encode_bytes, read_frame, write_frame, ClientMessage, ConnectTicket,
-    PtySessionInfo, ServerMessage, ALPN,
+    PtySessionInfo, ServerMessage, ALPN, DEFAULT_RELAY_URL,
 };
 use iroh::endpoint::presets;
 use iroh::Watcher;
@@ -1073,7 +1073,7 @@ async fn main() -> Result<()> {
 
     let endpoint = bind_endpoint(secret.key).await?;
     endpoint.online().await;
-    let endpoint_addr = ticket_endpoint_addr(&endpoint, has_stable_secret_source(&args));
+    let endpoint_addr = ticket_endpoint_addr(&endpoint);
     let ticket = ConnectTicket::new(args.name.clone(), endpoint_addr);
 
     if let Some(path) = args.ticket_output.as_deref() {
@@ -1117,26 +1117,23 @@ async fn serve_endpoint(
 }
 
 async fn bind_endpoint(secret_key: SecretKey) -> Result<Endpoint> {
+    let relay_url: iroh::RelayUrl = DEFAULT_RELAY_URL
+        .parse()
+        .context("invalid default relay URL")?;
+    let relay_map =
+        iroh::RelayMap::from(relay_url).with_auth_token(secret_key.public().to_string());
+
     Endpoint::builder(presets::N0)
         .secret_key(secret_key)
+        .relay_mode(iroh::RelayMode::Custom(relay_map))
         .alpns(vec![ALPN.to_vec()])
         .bind()
         .await
         .context("failed to bind iroh endpoint")
 }
 
-fn ticket_endpoint_addr(endpoint: &Endpoint, stable: bool) -> EndpointAddr {
-    let current = endpoint.watch_addr().get();
-    if !stable {
-        return current;
-    }
-
-    let relay_url = current.relay_urls().next().cloned();
-    if let Some(relay_url) = relay_url {
-        EndpointAddr::new(endpoint.id()).with_relay_url(relay_url)
-    } else {
-        current
-    }
+fn ticket_endpoint_addr(endpoint: &Endpoint) -> EndpointAddr {
+    endpoint.watch_addr().get()
 }
 
 fn print_agent_intro(agent_name: &str, shell: &str, ticket: &ConnectTicket) {
@@ -1193,10 +1190,6 @@ fn configured_secret_file(args: &Args) -> Result<Option<PathBuf>> {
         return Ok(Some(default_persistent_secret_path()?));
     }
     Ok(None)
-}
-
-fn has_stable_secret_source(args: &Args) -> bool {
-    args.secret.is_some() || args.secret_file.is_some() || args.persistent_ticket
 }
 
 fn configured_pid_file(args: &Args) -> Result<Option<PathBuf>> {

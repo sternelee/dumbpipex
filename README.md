@@ -8,7 +8,7 @@ A p2p remote terminal built with **Tauri + iroh + PTY**.
 - **`src-tauri` + `src/`**: the Tauri app. It connects to the agent with the ticket, creates a remote PTY, and renders the terminal UI.
 - **`crates/dumbpipex-core`**: the shared Rust protocol/ticket crate used by both sides.
 
-The design follows the same split as sshx for terminal ownership: the machine with the shell keeps the PTY locally, while the app is only a remote controller/viewer. The transport layer is direct iroh p2p instead of a central server.
+The design follows the same split as sshx for terminal ownership: the machine with the shell keeps the PTY locally, while the app is only a remote controller/viewer. The transport layer is direct iroh p2p instead of a central server. Both the CLI agent and Tauri app use `https://relay.leeapp.dev` as the default iroh relay service while still allowing iroh to use direct paths when available.
 
 ## Run the local agent
 
@@ -54,7 +54,7 @@ Stop the managed background agent:
 cargo run -p dumbpipex-cli -- --persistent-ticket --stop-demand
 ```
 
-The agent prints a **ticket**. Paste that ticket into the Tauri app to connect.
+The agent prints a **ticket**. Paste that ticket into the Tauri app to connect. The ticket includes the current iroh address information, including the default relay `https://relay.leeapp.dev`.
 
 ## Run the Tauri app
 
