@@ -350,9 +350,9 @@
 <style>
   .shortcuts-bar {
     display: grid;
-    gap: 0.45rem;
-    padding: 0.5rem 0.6rem;
-    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    gap: 0.35rem;
+    padding: 0.35rem 0.4rem;
+    padding-bottom: calc(0.35rem + env(safe-area-inset-bottom));
     background: rgba(2, 6, 23, 0.95);
     border-top: 1px solid rgba(148, 163, 184, 0.12);
     backdrop-filter: blur(18px);
@@ -363,7 +363,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
 
   .quick-btn {
@@ -375,8 +375,8 @@
     font-size: 0.75rem;
     font-weight: 600;
     touch-action: manipulation;
-    padding: 0.55rem 0.6rem;
-    min-height: 2.75rem; /* 44px iOS HIG / 48dp Material */
+    padding: 0.4rem 0.5rem;
+    min-height: 2.4rem;
     white-space: nowrap;
     transition: background-color 120ms ease, border-color 120ms ease;
   }
@@ -389,12 +389,12 @@
     background: rgba(15, 23, 42, 0.7);
     color: #cbd5e1;
     font: inherit;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     font-weight: 700;
     touch-action: manipulation;
-    padding: 0.55rem 0.65rem;
-    min-height: 2.75rem; /* 44px */
-    min-width: 3.6rem;   /* wide enough for ⌃×N count badge */
+    padding: 0.4rem 0.5rem;
+    min-height: 2.4rem;
+    min-width: 2.6rem;
     text-align: center;
     transition: all 120ms ease;
   }
@@ -409,47 +409,90 @@
   }
 
   .paste-btn { border-color: rgba(59, 130, 246, 0.35); }
-  .toggle-btn { min-width: 2.75rem; min-height: 2.75rem; padding: 0.4rem 0.5rem; font-size: 0.95rem; }
+  .toggle-btn { min-width: 2.4rem; min-height: 2.4rem; padding: 0.3rem 0.4rem; font-size: 0.85rem; }
 
   .shortcuts-expanded {
     display: grid;
-    gap: 0.4rem;
+    gap: 0.3rem;
   }
 
   .special-char-grid {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
   .char-btn {
-    min-width: 2.75rem;
-    min-height: 2.75rem;
-    padding: 0.4rem 0.5rem;
-    font-size: 0.8rem;
+    min-width: 2.2rem;
+    min-height: 2.2rem;
+    padding: 0.3rem 0.4rem;
+    font-size: 0.72rem;
   }
 
   .command-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
   .cmd-btn {
-    font-size: 0.75rem;
-    padding: 0.45rem 0.6rem;
-    min-height: 2.75rem;
+    font-size: 0.7rem;
+    padding: 0.3rem 0.45rem;
+    min-height: 2.2rem;
   }
 
   .nav-strip {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
+    gap: 0.25rem;
   }
   .nav-btn {
-    font-size: 0.78rem;
-    padding: 0.45rem 0.6rem;
-    min-width: 2.75rem;
-    min-height: 2.75rem;
+    font-size: 0.72rem;
+    padding: 0.3rem 0.45rem;
+    min-width: 2.2rem;
+    min-height: 2.2rem;
     text-align: center;
+  }
+
+  /* Extra-narrow phones (≤420pt / iPhone SE 375pt): compress every chip
+     further so the modifier strip (4 modifiers + Paste + Focus + ⌨) fits
+     on a single row, and each strip row stays under 36pt tall to keep the
+     overall bar from wrapping into two visible rows. */
+  @media (max-width: 420px) {
+    .shortcuts-bar {
+      gap: 0.25rem;
+      padding: 0.25rem 0.3rem;
+    }
+
+    .modifier-strip {
+      gap: 0.2rem;
+    }
+
+    .modifier-chip {
+      font-size: 0.66rem;
+      padding: 0.3rem 0.4rem;
+      min-height: 2rem;
+      min-width: 2.2rem;
+    }
+
+    .quick-btn {
+      font-size: 0.66rem;
+      padding: 0.3rem 0.4rem;
+      min-height: 2rem;
+    }
+
+    .toggle-btn {
+      min-width: 2rem;
+      min-height: 2rem;
+      padding: 0.2rem 0.3rem;
+    }
+
+    .char-btn,
+    .cmd-btn,
+    .nav-btn {
+      font-size: 0.65rem;
+      padding: 0.25rem 0.35rem;
+      min-height: 1.9rem;
+      min-width: 1.9rem;
+    }
   }
 
   .repeatable-shortcut {

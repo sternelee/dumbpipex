@@ -422,20 +422,56 @@
     font-size: 0.78rem;
     font-weight: 500;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: background-color 120ms ease, color 120ms ease;
   }
 
   @media (max-width: 680px) {
     .menu-trigger {
       min-height: 2.75rem; /* 44px tap target */
-      padding: 0.5rem 0.85rem;
-      font-size: 0.85rem;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.78rem;
     }
 
     .menu-bar {
       height: auto;
       min-height: 2.75rem;
-      padding: 0.25rem 0.6rem;
+      padding: 0.25rem 0.5rem;
+      gap: 0.4rem;
+    }
+
+    .menu-bar-left {
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 7rem;
+      gap: 0.3rem;
+    }
+
+    .menu-agent-name {
+      max-width: 100%;
+    }
+
+    .menu-bar-right {
+      flex-shrink: 0;
+      gap: 0.1rem;
+    }
+  }
+
+  /* Extra-narrow phones (e.g. iPhone SE 375pt): drop the phase dot from
+     the desktop menu bar — the mobile SessionHeader already shows it, and
+     freeing the space keeps both File and View trigger labels fully
+     visible without ellipsis. */
+  @media (max-width: 420px) {
+    .menu-bar-left {
+      max-width: 5rem;
+    }
+
+    .menu-dot {
+      display: none;
+    }
+
+    .menu-trigger {
+      padding: 0.4rem 0.5rem;
     }
   }
 
