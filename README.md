@@ -8,7 +8,7 @@ A p2p remote terminal built with **Tauri + iroh + PTY**.
 - **`src-tauri` + `src/`**: the Tauri app. It connects to the agent with the ticket, creates a remote PTY, and renders the terminal UI.
 - **`crates/dumbpipex-core`**: the shared Rust protocol/ticket crate used by both sides.
 
-The design follows the same split as sshx for terminal ownership: the machine with the shell keeps the PTY locally, while the app is only a remote controller/viewer. The transport layer is direct iroh p2p instead of a central server. Both the CLI agent and Tauri app use `https://relay.leeapp.dev` as the default iroh relay service while still allowing iroh to use direct paths when available.
+The design follows the same split as sshx for terminal ownership: the machine with the shell keeps the PTY locally, while the app is only a remote controller/viewer. The transport layer is direct iroh p2p instead of a central server. By default the CLI agent and Tauri app use the official number0 (`n0`) iroh relay, but either side can be pointed at a self-hosted relay by setting the `DUMBPIPEX_RELAY_URL` environment variable.
 
 ## Run the local agent
 
@@ -54,7 +54,17 @@ Stop the managed background agent:
 cargo run -p dumbpipex-cli -- --persistent-ticket --stop-demand
 ```
 
-The agent prints a **ticket**. Paste that ticket into the Tauri app to connect. The ticket includes the current iroh address information, including the default relay `https://relay.leeapp.dev`.
+The agent prints a **ticket**. Paste that ticket into the Tauri app to connect. The ticket includes the current iroh address information, including the relay URL that was used to reach the agent (or the `DUMBPIPEX_RELAY_URL` override if you set one).
+
+## Custom relay
+
+Both the agent and the Tauri app pick up the iroh relay URL from the `DUMBPIPEX_RELAY_URL` environment variable. When the variable is unset (or empty) they fall back to the official iroh relay run by number0. The same relay URL must be used on both sides — if you run a self-hosted relay, set the variable for the CLI agent and for the Tauri app process (for example via the app's launch environment, `Info.plist` `LSEnvironment`, or `launchctl setenv`).
+
+```bash
+# Self-hosted relay example
+DUMBPIPEX_RELAY_URL=https://relay.example.com cargo run -p dumbpipex-cli
+DUMBPIPEX_RELAY_URL=https://relay.example.com npm run tauri dev
+```
 
 ## Run the Tauri app
 

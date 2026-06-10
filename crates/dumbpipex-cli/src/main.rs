@@ -12,7 +12,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::{ArgAction, Parser};
 use dumbpipex_core::{
     decode_bytes, encode_bytes, read_frame, write_frame, ClientMessage, ConnectTicket,
-    PtySessionInfo, ServerMessage, ALPN, DEFAULT_RELAY_URL,
+    PtySessionInfo, ServerMessage, ALPN,
 };
 use iroh::endpoint::presets;
 use iroh::Watcher;
@@ -1117,9 +1117,8 @@ async fn serve_endpoint(
 }
 
 async fn bind_endpoint(secret_key: SecretKey) -> Result<Endpoint> {
-    let relay_url: iroh::RelayUrl = DEFAULT_RELAY_URL
-        .parse()
-        .context("invalid default relay URL")?;
+    let relay_url = dumbpipex_core::resolve_relay_url().context("failed to resolve relay URL")?;
+    info!(relay_url = %relay_url, "configuring iroh relay");
     let relay_map =
         iroh::RelayMap::from(relay_url).with_auth_token(secret_key.public().to_string());
 

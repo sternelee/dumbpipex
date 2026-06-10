@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
 use dumbpipex_core::{
-    read_frame, write_frame, ClientMessage, ConnectTicket, PtySessionInfo, ServerMessage, ALPN,
-    DEFAULT_RELAY_URL,
+    read_frame, resolve_relay_url, write_frame, ClientMessage, ConnectTicket, PtySessionInfo,
+    ServerMessage, ALPN,
 };
 use iroh::endpoint::{presets, Connection};
 use iroh::{Endpoint, SecretKey};
@@ -125,7 +125,8 @@ async fn connect_ticket_inner(
 
     info!("binding iroh endpoint...");
     let secret_key = SecretKey::generate();
-    let relay_url: iroh::RelayUrl = DEFAULT_RELAY_URL.parse().map_err(err_to_string)?;
+    let relay_url = resolve_relay_url().map_err(err_to_string)?;
+    info!(relay_url = %relay_url, "configuring iroh relay");
     let relay_map =
         iroh::RelayMap::from(relay_url).with_auth_token(secret_key.public().to_string());
     let endpoint = tokio::time::timeout(

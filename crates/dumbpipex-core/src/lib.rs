@@ -10,8 +10,44 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub const ALPN: &[u8] = b"dumbpipex-terminal-v1";
-pub const DEFAULT_RELAY_URL: &str = "https://relay.leeapp.dev";
 pub const MAX_INPUT_CHUNK_BYTES: usize = 16 * 1024;
+
+/// Environment variable that overrides the iroh relay URL used by both the
+/// CLI agent and the Tauri viewer.
+///
+/// When set to a non-empty value it must be a valid [`iroh::RelayUrl`] (e.g.
+/// `https://relay.example.com`). When unset or empty, the official number0
+/// (`n0`) iroh relay is used (the same set baked into iroh's `presets::N0`).
+pub const RELAY_URL_ENV: &str = "DUMBPIPEX_RELAY_URL";
+
+/// Hostname of the official number0 NA-East iroh relay. Mirrors
+/// `iroh::defaults::NA_EAST_RELAY_HOSTNAME` from the iroh crate. iroh does
+/// not currently re-export the full default URL as a single string, so we
+/// document it here and use `iroh::RelayMode::Default` in callers to pick up
+/// the whole four-region set.
+pub const OFFICIAL_RELAY_URL: &str = "https://use1-1.relay.n0.iroh-canary.iroh.link";
+
+/// Resolve the iroh relay URL to use, honoring [`RELAY_URL_ENV`] when set.
+///
+/// Returns the official iroh relay URL by default. Callers are expected to
+/// pass the result into `iroh::RelayMap::from(...)` and wrap it in
+/// `iroh::RelayMode::Custom(...)`; when the environment override is absent
+/// callers may also choose `iroh::RelayMode::Default` to use iroh's full
+/// four-region map.
+pub fn resolve_relay_url() -> Result<iroh::RelayUrl> {
+    let raw = std::env::var(RELAY_URL_ENV)
+        .ok()
+        .map(|v| v.trim().to_string())
+        .filter(|v| !v.is_empty());
+    match raw {
+        Some(value) => value
+            .parse::<iroh::RelayUrl>()
+            .with_context(|| format!("invalid {RELAY_URL_ENV} value: {value:?}")),
+        None => OFFICIAL_RELAY_URL
+            .parse::<iroh::RelayUrl>()
+            .context("invalid official iroh relay URL constant"),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConnectTicket {
@@ -260,5 +296,89 @@ mod tests {
         )
         .expect("decode old pty info");
         assert_eq!(decoded.bytes_dropped, 0);
+    }
+
+    /// Serial tests that mutate the `DUMBPIPEX_RELAY_URL` env var. Run with
+    /// `cargo test -p dumbpipex-core -- --test-threads=1` to avoid races, or
+    /// rely on the unique `serial_test`-style helper below which guards the
+    /// env mutation with a process-wide mutex.
+    mod relay_url_env_tests {
+        use super::*;
+        use std::sync::Mutex;
+
+        // Single global guard so the env-mutating tests never race with
+        // each other (cargo runs tests in parallel by default).
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+        fn with_env_lock<R>(f: impl FnOnce() -> R) -> R {
+            let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+            f()
+        }
+
+        fn clear_env() {
+            // SAFETY: tests in this module serialize access through ENV_LOCK.
+            unsafe {
+                std::env::remove_var(RELAY_URL_ENV);
+            }
+        }
+
+        fn set_env(value: &str) {
+            // SAFETY: tests in this module serialize access through ENV_LOCK.
+            unsafe {
+                std::env::set_var(RELAY_URL_ENV, value);
+            }
+        }
+
+        #[test]
+        fn default_relay_url_is_official_iroh() {
+            with_env_lock(|| {
+                clear_env();
+                let url = resolve_relay_url().expect("default relay URL parses");
+                let s = url.to_string();
+                // The official number0 NA-East relay, mirroring
+                // `iroh::defaults::NA_EAST_RELAY_HOSTNAME`.
+                assert!(
+                    s.starts_with("https://use1-1.relay.n0.iroh-canary.iroh.link"),
+                    "expected default to point at official iroh relay, got {s}"
+                );
+            });
+        }
+
+        #[test]
+        fn env_var_overrides_default() {
+            with_env_lock(|| {
+                set_env("https://relay.example.com");
+                let url = resolve_relay_url().expect("override parses");
+                // iroh's RelayUrl normalizes by adding a trailing slash.
+                assert_eq!(url.to_string(), "https://relay.example.com/");
+                clear_env();
+            });
+        }
+
+        #[test]
+        fn empty_env_var_falls_back_to_default() {
+            with_env_lock(|| {
+                set_env("   ");
+                let url = resolve_relay_url().expect("whitespace env falls back to default");
+                assert!(url
+                    .to_string()
+                    .starts_with("https://use1-1.relay.n0.iroh-canary.iroh.link"));
+                clear_env();
+            });
+        }
+
+        #[test]
+        fn invalid_env_var_returns_error() {
+            with_env_lock(|| {
+                set_env("not a url");
+                let err = resolve_relay_url().expect_err("invalid URL should error");
+                let msg = format!("{err:?}");
+                assert!(
+                    msg.contains(RELAY_URL_ENV),
+                    "error should mention {RELAY_URL_ENV}, got: {msg}"
+                );
+                clear_env();
+            });
+        }
     }
 }
