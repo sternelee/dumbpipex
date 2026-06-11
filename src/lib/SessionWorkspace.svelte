@@ -9,6 +9,7 @@
 
   import MobileShortcutBar from "$lib/MobileShortcutBar.svelte";
   import MobileSheet from "$lib/MobileSheet.svelte";
+  import SessionHeader from "$lib/SessionHeader.svelte";
   import { terminalThemes, sessionModeLabel } from "$lib/terminal-ui";
   import type { PtySession, SessionMode, SessionPhase } from "$lib/terminal-ui";
   let {
@@ -423,29 +424,41 @@
   data-testid="session-workspace"
   data-phase={sessionPhase}
 >
-  <MenuBar
-    {agentName}
-    {sessionPhase}
-    {fontSize}
-    {showSearch}
-    compact={compactLayout}
-    {hasActivePty}
-    {readOnly}
-    themes={terminalThemes}
-    {themeId}
-    onNewTab={onCreatePty}
-    onCloseTab={onCloseActivePty}
-    onSplitRight={handleSplitRight}
-    onSplitLeft={handleSplitLeft}
-    splitActive={!!splitPtyId}
-    onCloseSplit={closeSplit}
-    {onDisconnect}
-    onIncreaseFont={increaseFont}
-    onDecreaseFont={decreaseFont}
-    onResetFont={resetFont}
-    onToggleSearch={toggleSearchPanel}
-    onSelectTheme={selectTheme}
-  />
+  {#if compactLayout}
+    <SessionHeader
+      {agentName}
+      {status}
+      {sessionPhase}
+      {compactLayout}
+      {keyboardOpen}
+      busy={busy || readOnly}
+      {onDisconnect}
+    />
+  {:else}
+    <MenuBar
+      {agentName}
+      {sessionPhase}
+      {fontSize}
+      {showSearch}
+      compact={compactLayout}
+      {hasActivePty}
+      {readOnly}
+      themes={terminalThemes}
+      {themeId}
+      onNewTab={onCreatePty}
+      onCloseTab={onCloseActivePty}
+      onSplitRight={handleSplitRight}
+      onSplitLeft={handleSplitLeft}
+      splitActive={!!splitPtyId}
+      onCloseSplit={closeSplit}
+      {onDisconnect}
+      onIncreaseFont={increaseFont}
+      onDecreaseFont={decreaseFont}
+      onResetFont={resetFont}
+      onToggleSearch={toggleSearchPanel}
+      onSelectTheme={selectTheme}
+    />
+  {/if}
 
   <section class="terminal-card" bind:this={terminalCardRef}>
     <SessionBar
@@ -561,7 +574,7 @@
       </div>
     {/if}
 
-    {#if compactLayout}
+    {#if compactLayout && !keyboardOpen}
       <MobileShortcutBar
         {compactLayout}
         {phoneCompactLayout}
@@ -622,6 +635,23 @@
     border-radius: 1rem;
     box-shadow: 0 10px 40px rgba(15, 23, 42, 0.45);
     overflow: hidden;
+  }
+
+  /* ===== keyboard open ===== */
+
+  .workspace-shell.keyboard-open {
+    gap: 0.3rem;
+    padding-top: max(0.4rem, env(safe-area-inset-top, 0.4rem));
+    padding-right: calc(0.35rem + env(safe-area-inset-right, 0px));
+    padding-bottom: 0;
+    padding-left: calc(0.35rem + env(safe-area-inset-left, 0px));
+  }
+
+  .workspace-shell.keyboard-open .terminal-card {
+    padding: 0.35rem;
+    gap: 0.3rem;
+    border-radius: 0.55rem;
+    border-width: 0.5px;
   }
 
   .terminal-stack {

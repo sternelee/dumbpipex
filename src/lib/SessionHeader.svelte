@@ -6,12 +6,14 @@
     status,
     sessionPhase,
     busy,
+    keyboardOpen = false,
     onDisconnect,
   }: {
     agentName: string;
     status: string;
     sessionPhase: SessionPhase;
     compactLayout: boolean;
+    keyboardOpen?: boolean;
     busy: boolean;
     onDisconnect: () => void;
   } = $props();
@@ -31,14 +33,17 @@
   }
 </script>
 
-<header class="mobile-header">
+<header
+  class="mobile-header"
+  class:keyboard-open={keyboardOpen}
+>
   <div class="mobile-header-left">
     <span class="mobile-dot" style:color={phaseColor(sessionPhase)}>
       {phaseDot(sessionPhase)}
     </span>
     <span class="mobile-agent-name">{agentName || "Remote session"}</span>
   </div>
-  <div class="mobile-header-center">
+  <div class="mobile-header-center" class:hidden={keyboardOpen}>
     <span class="mobile-status">{status}</span>
   </div>
   <button class="mobile-disconnect" onclick={onDisconnect} disabled={busy}>
@@ -58,6 +63,16 @@
     border-radius: 0.75rem;
     min-height: 2.4rem;
     flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .mobile-header.keyboard-open {
+    padding: 0.28rem 0.5rem;
+    min-height: 0;
+    gap: 0.35rem;
+    border-radius: 0.55rem;
   }
 
   .mobile-header-left {
@@ -81,9 +96,17 @@
     text-overflow: ellipsis;
   }
 
+  .mobile-header.keyboard-open .mobile-agent-name {
+    font-size: 0.75rem;
+  }
+
   .mobile-header-center {
     min-width: 0;
     overflow: hidden;
+  }
+
+  .mobile-header-center.hidden {
+    display: none;
   }
 
   .mobile-status {
@@ -108,6 +131,12 @@
     transition:
       background-color 140ms ease,
       border-color 140ms ease;
+  }
+
+  .mobile-header.keyboard-open .mobile-disconnect {
+    padding: 0.18rem 0.4rem;
+    font-size: 0.72rem;
+    border-radius: 0.4rem;
   }
 
   .mobile-disconnect:hover:not(:disabled) {
